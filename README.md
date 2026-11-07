@@ -13,11 +13,13 @@ LineDrill importe tes parties, construit l'arbre de tes ouvertures avec ton scor
 
 ## Stack
 
-Flutter · `chessground` · `dartchess` · SQLite via `drift` · `http` · Riverpod · FSRS.
+Flutter · `chessground` · `dartchess` · `http` · Riverpod · stockage local en fichiers.
 
 ## Statut
 
-Jalons 1 et 2 en place : import Chess.com, arbre navigable avec filtres, classement des lignes faibles et liens vers les parties. Prochain : jalon 3, le répertoire.
+Jalons 1 à 3 en place : import Chess.com, arbre navigable avec filtres, lignes faibles, répertoire avec explorateur Lichess et détection des déviations. Prochain : jalon 4, l'entraînement.
+
+L'APK est compilé par GitHub Actions à chaque push sur `main` et publié dans les [releases](https://github.com/Nohzoh/LineDrill/releases/latest).
 
 ## Lancer
 

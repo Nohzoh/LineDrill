@@ -1,0 +1,46 @@
+import 'dart:convert';
+import 'dart:io';
+
+import '../core/repertoire.dart';
+
+/// Répertoire et réglages, stockés en JSON dans le dossier de l'appli.
+class RepertoireStore {
+  RepertoireStore(this.root);
+
+  final Directory root;
+
+  File get _repertoireFile => File('${root.path}/repertoire.json');
+
+  File get _tokenFile => File('${root.path}/lichess_token.txt');
+
+  // Lectures synchrones : ces fichiers ne font que quelques Ko.
+  Future<Repertoire> loadRepertoire() async {
+    if (!_repertoireFile.existsSync()) return Repertoire();
+    return Repertoire.fromJson(jsonDecode(_repertoireFile.readAsStringSync()) as List<Object?>);
+  }
+
+  /// Écrit dans un fichier temporaire puis le renomme, pour ne jamais
+  /// laisser un répertoire à moitié écrit.
+  Future<void> saveRepertoire(Repertoire repertoire) async {
+    await root.create(recursive: true);
+    final tmp = File('${_repertoireFile.path}.tmp');
+    await tmp.writeAsString(const JsonEncoder.withIndent(' ').convert(repertoire.toJson()));
+    await tmp.rename(_repertoireFile.path);
+  }
+
+  Future<String?> lichessToken() async {
+    if (!_tokenFile.existsSync()) return null;
+    final token = _tokenFile.readAsStringSync().trim();
+    return token.isEmpty ? null : token;
+  }
+
+  Future<void> setLichessToken(String? token) async {
+    final value = token?.trim() ?? '';
+    if (value.isEmpty) {
+      if (await _tokenFile.exists()) await _tokenFile.delete();
+      return;
+    }
+    await root.create(recursive: true);
+    await _tokenFile.writeAsString(value);
+  }
+}

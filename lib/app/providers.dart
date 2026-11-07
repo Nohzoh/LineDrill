@@ -1,16 +1,24 @@
+import 'dart:io';
+
 import 'package:dartchess/dartchess.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path_provider/path_provider.dart';
 
 import '../core/game_record.dart';
 import '../core/opening_tree.dart';
+import '../core/repertoire.dart';
 import '../core/weak_lines.dart';
 import '../data/chesscom_client.dart';
 import '../data/game_store.dart';
 import '../data/import_service.dart';
+import '../data/lichess_explorer.dart';
+import '../data/repertoire_store.dart';
+
+/// Dossier privé de l'appli, où vivent parties, répertoire et réglages.
+final appDirProvider = FutureProvider<Directory>((ref) => getApplicationSupportDirectory());
 
 final importServiceProvider = FutureProvider<ImportService>((ref) async {
-  final dir = await getApplicationSupportDirectory();
+  final dir = await ref.watch(appDirProvider.future);
   final client = ChessComClient();
   ref.onDispose(client.close);
   return ImportService(client, GameStore(dir));
@@ -88,4 +96,62 @@ final lineProvider = NotifierProvider<LineNotifier, List<String>>(LineNotifier.n
 final weakLinesProvider = Provider<List<WeakLine>>((ref) {
   final tree = ref.watch(treeProvider);
   return tree == null ? const [] : weakLines(tree);
+});
+
+final repertoireStoreProvider = FutureProvider<RepertoireStore>(
+  (ref) async => RepertoireStore(await ref.watch(appDirProvider.future)),
+);
+
+/// Répertoire de l'utilisateur, enregistré à chaque modification.
+class RepertoireNotifier extends AsyncNotifier<Repertoire> {
+  @override
+  Future<Repertoire> build() async =>
+      (await ref.watch(repertoireStoreProvider.future)).loadRepertoire();
+
+  Future<void> _save(Repertoire Function(Repertoire) change) async {
+    final next = change(await future);
+    state = AsyncData(next);
+    await (await ref.read(repertoireStoreProvider.future)).saveRepertoire(next);
+  }
+
+  Future<void> setReference(Side color, Position position, String san, List<String> line) =>
+      _save((r) => r.withEntry(RepertoireEntry(
+            color: color,
+            positionKey: positionKey(position),
+            san: san,
+            line: List.unmodifiable(line),
+          )));
+
+  Future<void> remove(Side color, String key) => _save((r) => r.without(color, key));
+}
+
+final repertoireProvider =
+    AsyncNotifierProvider<RepertoireNotifier, Repertoire>(RepertoireNotifier.new);
+
+/// Respect du répertoire dans les parties filtrées (couleur et cadence).
+final repertoireUsageProvider = Provider<Map<String, EntryUsage>>((ref) {
+  final tree = ref.watch(treeProvider);
+  final repertoire = ref.watch(repertoireProvider).value;
+  if (tree == null || repertoire == null) return const {};
+  return repertoireUsage(tree.games, repertoire);
+});
+
+/// Jeton personnel Lichess pour l'explorateur.
+class LichessTokenNotifier extends AsyncNotifier<String?> {
+  @override
+  Future<String?> build() async => (await ref.watch(repertoireStoreProvider.future)).lichessToken();
+
+  Future<void> set(String? token) async {
+    await (await ref.read(repertoireStoreProvider.future)).setLichessToken(token);
+    state = AsyncData(await (await ref.read(repertoireStoreProvider.future)).lichessToken());
+  }
+}
+
+final lichessTokenProvider =
+    AsyncNotifierProvider<LichessTokenNotifier, String?>(LichessTokenNotifier.new);
+
+final explorerClientProvider = Provider<LichessExplorerClient>((ref) {
+  final client = LichessExplorerClient();
+  ref.onDispose(client.close);
+  return client;
 });

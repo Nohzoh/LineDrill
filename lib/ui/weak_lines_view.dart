@@ -20,6 +20,7 @@ class WeakLinesView extends ConsumerWidget {
     final tree = ref.watch(treeProvider);
     final lines = ref.watch(weakLinesProvider);
     final color = ref.watch(filterProvider).color;
+    final repertoire = ref.watch(repertoireProvider).value;
     if (tree == null) return const Center(child: CircularProgressIndicator());
 
     return ListView(
@@ -44,6 +45,9 @@ class WeakLinesView extends ConsumerWidget {
             line: line,
             orientation: color,
             fen: tree.follow(line.line)!.position.fen,
+            reference: line.lastMoveIsOpponent(color == Side.white)
+                ? repertoire?.lookup(color, tree.follow(line.line)!.key)?.san
+                : null,
             onOpen: () {
               ref.read(lineProvider.notifier).set(line.line);
               onOpenInTree();
@@ -60,6 +64,7 @@ class _WeakLineCard extends StatelessWidget {
     required this.line,
     required this.orientation,
     required this.fen,
+    required this.reference,
     required this.onOpen,
   });
 
@@ -67,6 +72,9 @@ class _WeakLineCard extends StatelessWidget {
   final WeakLine line;
   final Side orientation;
   final String fen;
+
+  /// Mon coup de référence après cette ligne, s'il existe.
+  final String? reference;
   final VoidCallback onOpen;
 
   @override
@@ -104,7 +112,11 @@ class _WeakLineCard extends StatelessWidget {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      opponentMove ? 'Réponse adverse : que jouer ici ?' : 'Ton coup te coûte des points',
+                      !opponentMove
+                          ? 'Ton coup te coûte des points'
+                          : reference == null
+                              ? 'Réponse adverse : que jouer ici ?'
+                              : 'Réponse adverse · mon coup prévu : ${moveLabel(line.line.length, reference!)}',
                       style: theme.textTheme.bodySmall,
                     ),
                     const SizedBox(height: 8),

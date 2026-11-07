@@ -13,7 +13,7 @@ Appli Android Flutter d'entraînement aux ouvertures d'échecs, basée sur les p
 | --- | --- |
 | Échiquier | `chessground` |
 | Règles, PGN, FEN | `dartchess` |
-| Stockage | PGN mensuels bruts en fichiers (jalon 1) ; SQLite via `drift` à partir du jalon 3 (répertoire, répétition espacée) |
+| Stockage | Fichiers dans le dossier privé de l'appli : PGN mensuels bruts, `repertoire.json`, `lichess_token.txt`. Pas de SQLite tant que les volumes restent de quelques Ko (`drift` à reconsidérer si besoin) |
 | Réseau | `http` |
 | Répétition espacée | FSRS (SM-2 en repli) |
 | État | Riverpod |
@@ -26,6 +26,11 @@ Appli Android Flutter d'entraînement aux ouvertures d'échecs, basée sur les p
 - Tags utiles : `White`, `Black`, `Result`, `TimeControl` (`60`, `180+2`…), `WhiteElo`, `BlackElo`, `Termination`, `ECOUrl`, `Link`, `UTCDate`.
 - Ignorer les variantes non standard (tag `Variant`).
 - Cadence : temps estimé = base + 40 × incrément ; < 180 s bullet, < 600 s blitz, sinon rapide.
+
+## Explorateur Lichess
+
+- `https://explorer.lichess.ovh/masters` (maîtres) et `/lichess` (bullet + blitz, tranches 1000 à 1600, soit 1000–1799 Elo).
+- Exige un jeton personnel (`Authorization: Bearer`), créé sans permission sur https://lichess.org/account/oauth/token/create ; saisi dans Réglages.
 
 ## Règles de l'arbre
 
@@ -40,7 +45,7 @@ Appli Android Flutter d'entraînement aux ouvertures d'échecs, basée sur les p
 
 1. Import et arbre navigable avec scores, filtres couleur et cadence.
 2. Lignes faibles classées + liens vers les parties.
-3. Répertoire : coups de référence, explorateur Lichess, détection des déviations.
+3. Répertoire : coups de référence, explorateur Lichess, détection des déviations. Un coup de référence par position (FEN) et par couleur ; une partie compte comme « suivie » jusqu'à sa première déviation (`lib/core/repertoire.dart`).
 4. Entraînement : répétition espacée, modes apprentissage et réflexe.
 
 ## Données de référence (octobre 2026, pseudo Lappeau)
@@ -60,10 +65,11 @@ Lignes faibles attendues :
 
 ## Code
 
-- `lib/core/` : modèle et logique pure (`game_record`, `pgn_import`, `opening_tree`, `weak_lines`).
-- `lib/data/` : client Chess.com, stockage des PGN, service d'import.
+- `lib/core/` : modèle et logique pure (`game_record`, `pgn_import`, `opening_tree`, `weak_lines`, `repertoire`).
+- `lib/data/` : client Chess.com, stockage des PGN, service d'import, client explorateur Lichess, stockage du répertoire et du jeton.
 - `lib/app/providers.dart` : providers Riverpod.
-- `lib/ui/` : `home_shell` (filtres + onglets Arbre / Points faibles), `tree_view`, `weak_lines_view`, `games_sheet` (parties d'une ligne, liens Chess.com), `import_screen`.
+- `lib/ui/` : `home_shell` (filtres + onglets Arbre / Points faibles / Répertoire), `tree_view` (étoile = coup de référence), `weak_lines_view`, `repertoire_view`, `explorer_sheet`, `games_sheet` (parties d'une ligne, liens Chess.com), `import_screen`, `settings_screen`.
+- Tests widget : le dossier de l'appli est remplacé par un dossier temporaire (`appDirProvider`) ; laisser finir les entrées-sorties avec `tester.runAsync` avant `pumpAndSettle`.
 - Test sur données réelles : `LINEDRILL_REF_PGN=chemin/du/pgn flutter test` (ignoré sinon). L'arbre fusionne les transpositions, donc certains comptes dépassent ceux du tableau ci-dessus (ex. Noirs 4.d4 c6 : 30 parties, 42 %).
 
 ## Conventions

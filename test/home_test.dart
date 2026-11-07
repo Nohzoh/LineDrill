@@ -1,5 +1,8 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:linedrill/app/providers.dart';
 import 'package:linedrill/core/pgn_import.dart';
@@ -44,16 +47,17 @@ class _FakeGames extends GamesNotifier {
 
 void main() {
   weakLinesTests();
+  repertoireTests();
 
   Future<void> pump(WidgetTester tester) async {
-    tester.view.physicalSize = const Size(1080, 2400);
+    tester.view.physicalSize = const Size(1080, 4000);
     tester.view.devicePixelRatio = 2.5;
     addTearDown(tester.view.reset);
     await tester.pumpWidget(ProviderScope(
-      overrides: [gamesProvider.overrideWith(_FakeGames.new)],
+      overrides: [gamesProvider.overrideWith(_FakeGames.new), _tmpDir()],
       child: const MaterialApp(home: HomeShell()),
     ));
-    await tester.pumpAndSettle();
+    await _settle(tester);
   }
 
   testWidgets('affiche les coups et navigue dans l\'arbre', (tester) async {
@@ -62,7 +66,7 @@ void main() {
     expect(find.text('1. e4'), findsOneWidget);
 
     await tester.tap(find.text('1. e4'));
-    await tester.pumpAndSettle();
+    await _settle(tester);
     expect(find.text('1… e5'), findsOneWidget);
     expect(find.text('1… c6'), findsOneWidget);
     expect(find.text('100 %'), findsOneWidget);
@@ -72,13 +76,13 @@ void main() {
   testWidgets('filtres couleur et cadence', (tester) async {
     await pump(tester);
     await tester.tap(find.text('Noirs'));
-    await tester.pumpAndSettle();
+    await _settle(tester);
     expect(find.text('1. d4'), findsOneWidget);
     expect(find.text('1. e4'), findsNothing);
 
     await tester.tap(find.text('Blancs'));
     await tester.tap(find.text('Blitz'));
-    await tester.pumpAndSettle();
+    await _settle(tester);
     expect(find.textContaining('1 parties'), findsWidgets);
   });
 }
@@ -104,30 +108,78 @@ class _WeakGames extends GamesNotifier {
 
 void weakLinesTests() {
   testWidgets('points faibles : classement, arbre et parties', (tester) async {
-    tester.view.physicalSize = const Size(1080, 2400);
+    tester.view.physicalSize = const Size(1080, 4000);
     tester.view.devicePixelRatio = 2.5;
     addTearDown(tester.view.reset);
     await tester.pumpWidget(ProviderScope(
-      overrides: [gamesProvider.overrideWith(_WeakGames.new)],
+      overrides: [gamesProvider.overrideWith(_WeakGames.new), _tmpDir()],
       child: const MaterialApp(home: HomeShell()),
     ));
-    await tester.pumpAndSettle();
+    await _settle(tester);
 
     await tester.tap(find.text('Points faibles'));
-    await tester.pumpAndSettle();
+    await _settle(tester);
     expect(find.text('#1  1. e4 c5', findRichText: true), findsOneWidget);
     expect(find.text('Réponse adverse : que jouer ici ?'), findsOneWidget);
 
     await tester.tap(find.text('Parties').first);
-    await tester.pumpAndSettle();
+    await _settle(tester);
     expect(find.text('12 parties · 0 victoires, 0 nulles, 12 défaites'), findsOneWidget);
     expect(find.textContaining('Défaite au temps'), findsWidgets);
     Navigator.of(tester.element(find.byType(GamesList))).pop();
-    await tester.pumpAndSettle();
+    await _settle(tester);
 
     await tester.tap(find.text('#1  1. e4 c5', findRichText: true));
-    await tester.pumpAndSettle();
+    await _settle(tester);
     expect(find.text('2. Nf3'), findsOneWidget);
     expect(find.textContaining('Cette ligne : 12 parties · 0 %'), findsOneWidget);
   });
+}
+
+/// Dossier temporaire à la place du dossier de l'appli (pas de path_provider en test).
+Override _tmpDir() {
+  final dir = Directory.systemTemp.createTempSync('linedrill');
+  addTearDown(() => dir.deleteSync(recursive: true));
+  return appDirProvider.overrideWith((ref) async => dir);
+}
+
+void repertoireTests() {
+  testWidgets('répertoire : étoile dans l\'arbre, onglet Répertoire', (tester) async {
+    tester.view.physicalSize = const Size(1080, 4000);
+    tester.view.devicePixelRatio = 2.5;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(ProviderScope(
+      overrides: [gamesProvider.overrideWith(_WeakGames.new), _tmpDir()],
+      child: const MaterialApp(home: HomeShell()),
+    ));
+    await _settle(tester);
+
+    await tester.tap(find.text('1. e4'));
+    await _settle(tester);
+    await tester.tap(find.text('1… c5'));
+    await _settle(tester);
+    expect(find.text('Pas encore de coup de référence ici'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('Choisir comme coup de référence'));
+    await _settle(tester);
+    expect(find.text('Mon coup : 2. Nf3'), findsOneWidget);
+    expect(find.textContaining('Joué dans 12 parties (0 %)'), findsOneWidget);
+
+    await tester.tap(find.text('Répertoire'));
+    await _settle(tester);
+    expect(find.text('Joué 12 fois sur 12 (0 %)'), findsOneWidget);
+    expect(find.textContaining('1 coups de référence'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('Retirer'));
+    await _settle(tester);
+    expect(find.textContaining('Aucun coup de référence'), findsOneWidget);
+  });
+}
+
+/// Laisse finir les entrées-sorties réelles (fichiers) puis les animations.
+Future<void> _settle(WidgetTester tester) async {
+  for (var i = 0; i < 3; i++) {
+    await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 50)));
+    await tester.pumpAndSettle();
+  }
 }
