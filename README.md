@@ -17,4 +17,12 @@ Flutter · `chessground` · `dartchess` · SQLite via `drift` · `http` · River
 
 ## Statut
 
-Cahier des charges rédigé, développement du jalon 1 (import + arbre) à démarrer.
+Jalon 1 (import Chess.com + arbre navigable avec filtres) en place. Prochain : jalon 2, classement des lignes faibles.
+
+## Lancer
+
+```sh
+flutter pub get
+flutter test
+flutter run
+```

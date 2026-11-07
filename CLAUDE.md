@@ -13,7 +13,7 @@ Appli Android Flutter d'entraînement aux ouvertures d'échecs, basée sur les p
 | --- | --- |
 | Échiquier | `chessground` |
 | Règles, PGN, FEN | `dartchess` |
-| Stockage | SQLite via `drift` |
+| Stockage | PGN mensuels bruts en fichiers (jalon 1) ; SQLite via `drift` à partir du jalon 3 (répertoire, répétition espacée) |
 | Réseau | `http` |
 | Répétition espacée | FSRS (SM-2 en repli) |
 | État | Riverpod |
@@ -55,6 +55,14 @@ Lignes faibles attendues :
 | Blancs | 1.e4 e5 2.Nf3 Nc6 3.d4 Nf6 | 37 | 45 % |
 | Noirs | 1.e4 d5 2.exd5 Qxd5 3.Nc3 Qa5 4.d4 c6 | 27 | 35 % |
 | Noirs | 1.d4 d5 2.e3 | 21 | 38 % |
+
+## Code
+
+- `lib/core/` : modèle et logique pure (`game_record`, `pgn_import`, `opening_tree`).
+- `lib/data/` : client Chess.com, stockage des PGN, service d'import.
+- `lib/app/providers.dart` : providers Riverpod.
+- `lib/ui/` : écrans.
+- Test sur données réelles : `LINEDRILL_REF_PGN=chemin/du/pgn flutter test` (ignoré sinon). L'arbre fusionne les transpositions, donc certains comptes dépassent ceux du tableau ci-dessus (ex. Noirs 4.d4 c6 : 30 parties, 42 %).
 
 ## Conventions
 
