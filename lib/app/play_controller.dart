@@ -17,6 +17,45 @@ final engineProvider = FutureProvider<ChessEngine>((ref) async {
   return engine;
 });
 
+/// Derniers réglages de partie (couleur et niveau), mémorisés dans les réglages.
+class PlaySetup {
+  const PlaySetup({this.color, this.level = OpponentLevel.easy});
+
+  /// `null` : suivre la couleur du filtre, tant que rien n'a été choisi.
+  final Side? color;
+  final OpponentLevel level;
+
+  Map<String, Object?> toJson() => {
+        if (color != null) 'color': color!.name,
+        'level': level.name,
+      };
+
+  factory PlaySetup.fromJson(Map<String, Object?> json) => PlaySetup(
+        color: Side.values.asNameMap()[json['color']],
+        level: OpponentLevel.values.asNameMap()[json['level']] ?? OpponentLevel.easy,
+      );
+}
+
+class PlaySetupNotifier extends AsyncNotifier<PlaySetup> {
+  @override
+  Future<PlaySetup> build() async {
+    final settings = await (await ref.watch(repertoireStoreProvider.future)).settings();
+    final play = settings['play'];
+    return play is Map ? PlaySetup.fromJson(play.cast<String, Object?>()) : const PlaySetup();
+  }
+
+  Future<void> set({Side? color, OpponentLevel? level}) async {
+    // État courant s'il est chargé : deux choix rapprochés ne s'écrasent pas.
+    final current = state.value ?? await future;
+    final next = PlaySetup(color: color ?? current.color, level: level ?? current.level);
+    state = AsyncData(next);
+    final store = await ref.read(repertoireStoreProvider.future);
+    await store.saveSettings({...await store.settings(), 'play': next.toJson()});
+  }
+}
+
+final playSetupProvider = AsyncNotifierProvider<PlaySetupNotifier, PlaySetup>(PlaySetupNotifier.new);
+
 /// Hasard des choix adverses (remplaçable en test).
 final randomProvider = Provider<math.Random>((ref) => math.Random());
 

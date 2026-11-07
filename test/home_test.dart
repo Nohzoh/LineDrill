@@ -9,6 +9,7 @@ import 'package:dartchess/dartchess.dart' hide File;
 import 'package:linedrill/app/drill_controller.dart';
 import 'package:linedrill/app/play_controller.dart';
 import 'package:linedrill/app/providers.dart';
+import 'package:linedrill/core/training.dart';
 import 'package:linedrill/engine/chess_engine.dart';
 import 'package:linedrill/core/pgn_import.dart';
 import 'package:linedrill/ui/games_sheet.dart';
@@ -241,6 +242,48 @@ void playTests() {
     await tester.tap(find.byTooltip('Nouvelle partie'));
     await _settle(tester);
     expect(find.text('Commencer'), findsOneWidget);
+  });
+
+  testWidgets('jouer : niveau et couleur mémorisés', (tester) async {
+    tester.view.physicalSize = const Size(1080, 4000);
+    tester.view.devicePixelRatio = 2.5;
+    addTearDown(tester.view.reset);
+    final dir = Directory.systemTemp.createTempSync('linedrill');
+    addTearDown(() => dir.deleteSync(recursive: true));
+    Widget app() => ProviderScope(
+          key: UniqueKey(),
+          overrides: [
+            gamesProvider.overrideWith(_WeakGames.new),
+            appDirProvider.overrideWith((ref) async => dir),
+            engineProvider.overrideWith((ref) async => _HarshEngine()),
+          ],
+          child: const MaterialApp(home: HomeShell()),
+        );
+    SegmentedButton<T> segmented<T>() =>
+        tester.widget<SegmentedButton<T>>(find.byType(SegmentedButton<T>));
+
+    await tester.pumpWidget(app());
+    await _settle(tester);
+    await tester.tap(find.text('Jouer'));
+    await _settle(tester);
+    await tester.tap(find.text('Moyen'));
+    await tester.tap(find.text('Noirs').last);
+    await _settle(tester);
+
+    // Une partie puis retour aux réglages : le choix est conservé.
+    await tester.tap(find.text('Commencer'));
+    await _settle(tester);
+    await tester.tap(find.byTooltip('Nouvelle partie'));
+    await _settle(tester);
+    expect(segmented<OpponentLevel>().selected, {OpponentLevel.medium});
+
+    // Redémarrage de l'appli : toujours conservé.
+    await tester.pumpWidget(app());
+    await _settle(tester);
+    await tester.tap(find.text('Jouer'));
+    await _settle(tester);
+    expect(segmented<OpponentLevel>().selected, {OpponentLevel.medium});
+    expect(segmented<Side>().selected, {Side.black});
   });
 }
 

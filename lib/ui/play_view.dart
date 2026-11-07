@@ -19,21 +19,15 @@ class PlayView extends ConsumerWidget {
   }
 }
 
-class _SetupView extends ConsumerStatefulWidget {
+class _SetupView extends ConsumerWidget {
   const _SetupView();
 
   @override
-  ConsumerState<_SetupView> createState() => _SetupViewState();
-}
-
-class _SetupViewState extends ConsumerState<_SetupView> {
-  Side? _color;
-  OpponentLevel _level = OpponentLevel.easy;
-
-  @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
-    final color = _color ?? ref.watch(filterProvider).color;
+    final setup = ref.watch(playSetupProvider).value ?? const PlaySetup();
+    final color = setup.color ?? ref.watch(filterProvider).color;
+    final notifier = ref.read(playSetupProvider.notifier);
     return ListView(
       padding: const EdgeInsets.all(24),
       children: [
@@ -53,7 +47,7 @@ class _SetupViewState extends ConsumerState<_SetupView> {
             ButtonSegment(value: Side.black, label: Text('Noirs')),
           ],
           selected: {color},
-          onSelectionChanged: (s) => setState(() => _color = s.first),
+          onSelectionChanged: (s) => notifier.set(color: s.first),
         ),
         const SizedBox(height: 20),
         Text('Adversaire', style: theme.textTheme.titleSmall),
@@ -62,12 +56,12 @@ class _SetupViewState extends ConsumerState<_SetupView> {
           segments: [
             for (final l in OpponentLevel.values) ButtonSegment(value: l, label: Text(l.label)),
           ],
-          selected: {_level},
-          onSelectionChanged: (s) => setState(() => _level = s.first),
+          selected: {setup.level},
+          onSelectionChanged: (s) => notifier.set(level: s.first),
         ),
         const SizedBox(height: 32),
         FilledButton.icon(
-          onPressed: () => ref.read(playProvider.notifier).start(color, _level),
+          onPressed: () => ref.read(playProvider.notifier).start(color, setup.level),
           icon: const Icon(Icons.play_arrow),
           label: const Text('Commencer'),
         ),
