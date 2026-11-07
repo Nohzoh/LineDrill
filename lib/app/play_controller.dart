@@ -49,8 +49,7 @@ class PlaySetupNotifier extends AsyncNotifier<PlaySetup> {
     final current = state.value ?? await future;
     final next = PlaySetup(color: color ?? current.color, level: level ?? current.level);
     state = AsyncData(next);
-    final store = await ref.read(repertoireStoreProvider.future);
-    await store.saveSettings({...await store.settings(), 'play': next.toJson()});
+    await (await ref.read(repertoireStoreProvider.future)).updateSetting('play', next.toJson());
   }
 }
 

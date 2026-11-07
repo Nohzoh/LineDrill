@@ -104,11 +104,29 @@ void main() {
       final store = RepertoireStore(tmp);
       expect(await store.settings(), isEmpty);
       const style = BoardStyle(theme: BoardTheme.blue, pieces: PieceStyle.maestro);
-      await store.saveSettings({'board': style.toJson()});
+      await store.updateSetting('board', style.toJson());
       final back = BoardStyle.fromJson(((await store.settings())['board']! as Map).cast());
       expect(back.theme, BoardTheme.blue);
       expect(back.pieces, PieceStyle.maestro);
       expect(BoardStyle.fromJson({'theme': 'inconnu'}).theme, BoardTheme.green);
+    });
+
+    test('réglages modifiés en même temps : aucun ne se perd', () async {
+      final store = RepertoireStore(tmp);
+      await Future.wait([
+        for (var i = 0; i < 20; i++) store.updateSetting('k$i', i),
+      ]);
+      final settings = await RepertoireStore(tmp).settings();
+      expect(settings.length, 20);
+      expect(settings['k7'], 7);
+    });
+
+    test('fichier de réglages abîmé : traité comme vide', () async {
+      File('${tmp.path}/settings.json').writeAsStringSync('{"board": {');
+      final store = RepertoireStore(tmp);
+      expect(await store.settings(), isEmpty);
+      await store.updateSetting('play', {'level': 'hard'});
+      expect((await store.settings())['play'], {'level': 'hard'});
     });
   });
 }

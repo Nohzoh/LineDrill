@@ -49,15 +49,38 @@ class RepertoireStore {
     await _tokenFile.writeAsString(value);
   }
 
-  /// Préférences d'affichage, en JSON libre.
+  /// Préférences (affichage, partie corrigée), en JSON libre.
+  ///
+  /// Un fichier illisible est traité comme vide plutôt que de bloquer l'appli.
   Future<Map<String, Object?>> settings() async {
-    if (!_settingsFile.existsSync()) return {};
-    return (jsonDecode(_settingsFile.readAsStringSync()) as Map).cast<String, Object?>();
+    await _settingsQueue;
+    return _readSettings();
   }
 
-  Future<void> saveSettings(Map<String, Object?> settings) async {
-    await root.create(recursive: true);
-    await _settingsFile.writeAsString(jsonEncode(settings));
+  Map<String, Object?> _readSettings() {
+    if (!_settingsFile.existsSync()) return {};
+    try {
+      return (jsonDecode(_settingsFile.readAsStringSync()) as Map).cast<String, Object?>();
+    } on FormatException {
+      return {};
+    }
+  }
+
+  /// Écritures des réglages, une à la fois : chaque modification relit le
+  /// fichier à jour, pour ne pas écraser une modification concurrente.
+  Future<void> _settingsQueue = Future.value();
+
+  /// Remplace la clé [key] des réglages par [value].
+  Future<void> updateSetting(String key, Object? value) {
+    final write = _settingsQueue.then((_) async {
+      await root.create(recursive: true);
+      final next = {..._readSettings(), key: value};
+      final tmp = File('${_settingsFile.path}.tmp');
+      await tmp.writeAsString(jsonEncode(next));
+      await tmp.rename(_settingsFile.path);
+    });
+    _settingsQueue = write.catchError((Object _) {});
+    return write;
   }
 
   /// État des révisions (répétition espacée).

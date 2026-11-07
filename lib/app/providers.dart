@@ -168,8 +168,7 @@ class BoardStyleNotifier extends AsyncNotifier<BoardStyle> {
 
   Future<void> set(BoardStyle style) async {
     state = AsyncData(style);
-    final store = await ref.read(repertoireStoreProvider.future);
-    await store.saveSettings({...await store.settings(), 'board': style.toJson()});
+    await (await ref.read(repertoireStoreProvider.future)).updateSetting('board', style.toJson());
   }
 }
 
