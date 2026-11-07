@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 
+import '../core/drill.dart';
 import '../core/repertoire.dart';
 
 /// Répertoire et réglages, stockés en JSON dans le dossier de l'appli.
@@ -14,6 +15,8 @@ class RepertoireStore {
   File get _tokenFile => File('${root.path}/lichess_token.txt');
 
   File get _settingsFile => File('${root.path}/settings.json');
+
+  File get _drillFile => File('${root.path}/drill.json');
 
   // Lectures synchrones : ces fichiers ne font que quelques Ko.
   Future<Repertoire> loadRepertoire() async {
@@ -55,5 +58,18 @@ class RepertoireStore {
   Future<void> saveSettings(Map<String, Object?> settings) async {
     await root.create(recursive: true);
     await _settingsFile.writeAsString(jsonEncode(settings));
+  }
+
+  /// État des révisions (répétition espacée).
+  Future<DrillDeck> loadDeck() async {
+    if (!_drillFile.existsSync()) return DrillDeck();
+    return DrillDeck.fromJson((jsonDecode(_drillFile.readAsStringSync()) as Map).cast<String, Object?>());
+  }
+
+  Future<void> saveDeck(DrillDeck deck) async {
+    await root.create(recursive: true);
+    final tmp = File('${_drillFile.path}.tmp');
+    await tmp.writeAsString(jsonEncode(deck.toJson()));
+    await tmp.rename(_drillFile.path);
   }
 }

@@ -13,9 +13,9 @@ Appli Android Flutter d'entraînement aux ouvertures d'échecs, basée sur les p
 | --- | --- |
 | Échiquier | `chessground` |
 | Règles, PGN, FEN | `dartchess` |
-| Stockage | Fichiers dans le dossier privé de l'appli : PGN mensuels bruts, `repertoire.json`, `lichess_token.txt`. Pas de SQLite tant que les volumes restent de quelques Ko (`drift` à reconsidérer si besoin) |
+| Stockage | Fichiers dans le dossier privé de l'appli : PGN mensuels bruts, `repertoire.json`, `drill.json`, `settings.json`, `lichess_token.txt`. Pas de SQLite tant que les volumes restent de quelques Ko (`drift` à reconsidérer si besoin) |
 | Réseau | `http` |
-| Répétition espacée | FSRS (SM-2 en repli) |
+| Répétition espacée | FSRS (paquet `fsrs`) |
 | État | Riverpod |
 
 ## Données Chess.com
@@ -56,7 +56,10 @@ Appli Android Flutter d'entraînement aux ouvertures d'échecs, basée sur les p
 1. Import et arbre navigable avec scores, filtres couleur et cadence.
 2. Lignes faibles classées + liens vers les parties.
 3. Répertoire : coups de référence, explorateur Lichess, détection des déviations. Un coup de référence par position (FEN) et par couleur ; une partie compte comme « suivie » jusqu'à sa première déviation (`lib/core/repertoire.dart`).
-4. Entraînement : partie corrigée (onglet Jouer) en place ; reste la répétition espacée ciblée sur les lignes et le mode réflexe chronométré.
+4. Entraînement : partie corrigée (onglet Jouer) et révisions (onglet Répertoire).
+   - Une carte FSRS (paquet `fsrs`) par coup de référence, stockée dans `drill.json` (`lib/core/drill.dart`). File du jour : en retard d'abord, puis nouvelles, les coups les plus souvent manqués dans mes parties en tête ; 20 par séance.
+   - Apprentissage : pas de chrono, après une erreur il faut jouer le bon coup (sans nouvelle note). Réflexe : 3 s par coup ; dépassé = raté, moins de 1,5 s = « facile ».
+   - Séance : `lib/app/drill_controller.dart`, écran `lib/ui/drill_screen.dart`.
 
 ## Données de référence (octobre 2026, pseudo Lappeau)
 
@@ -79,7 +82,7 @@ Lignes faibles attendues :
 - `lib/data/` : client Chess.com, stockage des PGN, service d'import, client explorateur Lichess, stockage du répertoire et du jeton.
 - `lib/app/providers.dart` : providers Riverpod. `lib/app/board_style.dart` : apparence de l'échiquier (par défaut vert + pièces Staunty, proche de Chess.com ; jeux de pièces libres de chessground uniquement, ne pas copier les pièces propriétaires de Chess.com), stockée dans `settings.json`.
 - `lib/ui/` : `home_shell` (filtres + onglets Arbre / Points faibles / Répertoire / Jouer), `play_view` (partie corrigée), `tree_view` (étoile = coup de référence), `weak_lines_view`, `repertoire_view`, `explorer_sheet`, `games_sheet` (parties d'une ligne, liens Chess.com), `import_screen`, `settings_screen`.
-- Tests widget : le dossier de l'appli est remplacé par un dossier temporaire (`appDirProvider`) ; laisser finir les entrées-sorties avec `tester.runAsync` avant `pumpAndSettle`.
+- Tests widget : le dossier de l'appli est remplacé par un dossier temporaire (`appDirProvider`) ; laisser finir les entrées-sorties avec `tester.runAsync` avant `pumpAndSettle`. Ne pas attendre une méthode de notifier qui fait `await future` à l'intérieur de `runAsync` (blocage) : la lancer avec `unawaited` puis faire avancer les zones.
 - Test sur données réelles : `LINEDRILL_REF_PGN=chemin/du/pgn flutter test` (ignoré sinon). L'arbre fusionne les transpositions, donc certains comptes dépassent ceux du tableau ci-dessus (ex. Noirs 4.d4 c6 : 30 parties, 42 %).
 
 ## Conventions

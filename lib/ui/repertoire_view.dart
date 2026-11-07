@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../app/drill_controller.dart';
 import '../app/providers.dart';
+import '../core/drill.dart';
 import '../core/repertoire.dart';
 import 'format.dart';
+import 'drill_screen.dart';
 import 'games_sheet.dart';
 
 /// Coups de référence de la couleur filtrée et leur respect dans mes parties.
@@ -41,6 +44,7 @@ class RepertoireView extends ConsumerWidget {
             style: Theme.of(context).textTheme.bodyMedium,
           ),
         ),
+        if (entries.isNotEmpty) const _DrillPanel(),
         for (final entry in entries)
           _EntryCard(
             entry: entry,
@@ -133,4 +137,72 @@ class _EntryCard extends StatelessWidget {
       ),
     );
   }
+}
+
+/// Lignes à réviser aujourd'hui et accès aux deux modes de révision.
+class _DrillPanel extends ConsumerWidget {
+  const _DrillPanel();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final due = ref.watch(dueProvider).length;
+    final theme = Theme.of(context);
+    String subtitle = 'Tout est à jour.';
+    if (due == 0) {
+      final repertoire = ref.watch(repertoireProvider).value;
+      final deck = ref.watch(deckProvider).value;
+      final now = ref.watch(clockProvider)();
+      final next = repertoire == null || deck == null
+          ? null
+          : nextDue(repertoire, deck, color: ref.watch(filterProvider).color, now: now);
+      if (next != null) subtitle = 'Tout est à jour. Prochaine révision ${_when(next.toLocal(), now)}.';
+    }
+    return Card(
+      margin: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+      color: theme.colorScheme.secondaryContainer,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              due == 0 ? 'Révisions' : '$due ${due == 1 ? 'ligne' : 'lignes'} à réviser',
+              style: theme.textTheme.titleMedium,
+            ),
+            const SizedBox(height: 4),
+            Text(due == 0 ? subtitle : 'Retrouve ton coup dans chaque position ; les lignes ratées reviennent plus souvent.'),
+            Wrap(
+              alignment: WrapAlignment.end,
+              spacing: 8,
+              children: [
+                OutlinedButton.icon(
+                  onPressed: due == 0 ? null : () => openDrill(context, ref, DrillMode.reflex),
+                  icon: const Icon(Icons.timer_outlined, size: 18),
+                  label: const Text('Réflexe (3 s)'),
+                ),
+                FilledButton.icon(
+                  onPressed: due == 0 ? null : () => openDrill(context, ref, DrillMode.learning),
+                  icon: const Icon(Icons.school_outlined, size: 18),
+                  label: const Text('Réviser'),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// « dans 2 h », « demain », « le 12/11 ».
+String _when(DateTime date, DateTime now) {
+  final local = now.toLocal();
+  final diff = date.difference(local);
+  if (diff.inMinutes < 60) return 'dans ${diff.inMinutes.clamp(1, 59)} min';
+  final today = DateTime(local.year, local.month, local.day);
+  final day = DateTime(date.year, date.month, date.day);
+  final days = day.difference(today).inDays;
+  if (days == 0) return 'dans ${diff.inHours} h';
+  if (days == 1) return 'demain';
+  return 'le ${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}';
 }

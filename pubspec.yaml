@@ -12,6 +12,7 @@ dependencies:
   flutter:
     sdk: flutter
   flutter_riverpod: ^3.5.0
+  fsrs: ^2.0.1
   http: ^1.6.0
   multistockfish: ^0.6.1
   path_provider: ^2.1.6

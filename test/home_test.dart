@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -5,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:dartchess/dartchess.dart' hide File;
+import 'package:linedrill/app/drill_controller.dart';
 import 'package:linedrill/app/play_controller.dart';
 import 'package:linedrill/app/providers.dart';
 import 'package:linedrill/engine/chess_engine.dart';
@@ -52,6 +54,7 @@ void main() {
   weakLinesTests();
   repertoireTests();
   playTests();
+  drillTests();
 
   Future<void> pump(WidgetTester tester) async {
     tester.view.physicalSize = const Size(1080, 4000);
@@ -238,5 +241,75 @@ void playTests() {
     await tester.tap(find.byTooltip('Nouvelle partie'));
     await _settle(tester);
     expect(find.text('Commencer'), findsOneWidget);
+  });
+}
+
+void drillTests() {
+  Future<ProviderContainer> setUpDrill(WidgetTester tester) async {
+    tester.view.physicalSize = const Size(1080, 4000);
+    tester.view.devicePixelRatio = 2.5;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(ProviderScope(
+      overrides: [gamesProvider.overrideWith(_WeakGames.new), _tmpDir()],
+      child: const MaterialApp(home: HomeShell()),
+    ));
+    await _settle(tester);
+    final container = ProviderScope.containerOf(tester.element(find.byType(HomeShell)));
+    final e4 = Chess.initial.play(Move.parse('e2e4')!);
+    final rep = container.read(repertoireProvider.notifier);
+    // Pas de runAsync ici : attendre le futur d'un provider depuis la zone
+    // réelle bloquerait ; _settle fait avancer les deux zones.
+    unawaited(rep.setReference(Side.white, e4.play(Move.parse('c7c5')!), 'Nf3', const ['e4', 'c5']));
+    await _settle(tester);
+    unawaited(rep.setReference(Side.white, e4.play(Move.parse('e7e5')!), 'Nf3', const ['e4', 'e5']));
+    await _settle(tester);
+    await tester.tap(find.text('Répertoire'));
+    await _settle(tester);
+    return container;
+  }
+
+  testWidgets('révision : apprentissage jusqu\'au bilan', (tester) async {
+    final container = await setUpDrill(tester);
+    expect(find.text('2 lignes à réviser'), findsOneWidget);
+
+    await tester.tap(find.text('Réviser'));
+    await _settle(tester);
+    expect(find.text('Révision · Apprentissage'), findsOneWidget);
+    expect(find.text('1 / 2'), findsOneWidget);
+
+    final drill = container.read(drillProvider.notifier);
+    unawaited(drill.attempt(Move.parse('g1f3')!));
+    await tester.pump();
+    expect(find.textContaining('Juste : 2. Nf3'), findsOneWidget);
+    await tester.pump(const Duration(seconds: 1));
+    await _settle(tester);
+    expect(find.text('2 / 2'), findsOneWidget);
+
+    unawaited(drill.attempt(Move.parse('d2d4')!));
+    await _settle(tester);
+    expect(find.textContaining('Joue-le pour continuer'), findsOneWidget);
+    unawaited(drill.attempt(Move.parse('g1f3')!));
+    await tester.pump(const Duration(seconds: 1));
+    await _settle(tester);
+    expect(find.text('Séance terminée'), findsOneWidget);
+    expect(find.textContaining('1 justes sur 2'), findsOneWidget);
+
+    await tester.tap(find.text('Terminer'));
+    await _settle(tester);
+    expect(find.textContaining('lignes à réviser'), findsNothing);
+    expect(find.textContaining('Prochaine révision'), findsOneWidget);
+  });
+
+  testWidgets('révision : réflexe, le chrono expire', (tester) async {
+    await setUpDrill(tester);
+    await tester.tap(find.text('Réflexe (3 s)'));
+    await _settle(tester);
+    expect(find.text('Révision · Réflexe'), findsOneWidget);
+    await tester.pump(const Duration(seconds: 4));
+    await _settle(tester);
+    expect(find.textContaining('Temps écoulé'), findsOneWidget);
+    await tester.tap(find.text('Suivant'));
+    await _settle(tester);
+    expect(find.text('2 / 2'), findsOneWidget);
   });
 }
