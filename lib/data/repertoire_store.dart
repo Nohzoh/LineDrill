@@ -13,6 +13,8 @@ class RepertoireStore {
 
   File get _tokenFile => File('${root.path}/lichess_token.txt');
 
+  File get _settingsFile => File('${root.path}/settings.json');
+
   // Lectures synchrones : ces fichiers ne font que quelques Ko.
   Future<Repertoire> loadRepertoire() async {
     if (!_repertoireFile.existsSync()) return Repertoire();
@@ -42,5 +44,16 @@ class RepertoireStore {
     }
     await root.create(recursive: true);
     await _tokenFile.writeAsString(value);
+  }
+
+  /// Préférences d'affichage, en JSON libre.
+  Future<Map<String, Object?>> settings() async {
+    if (!_settingsFile.existsSync()) return {};
+    return (jsonDecode(_settingsFile.readAsStringSync()) as Map).cast<String, Object?>();
+  }
+
+  Future<void> saveSettings(Map<String, Object?> settings) async {
+    await root.create(recursive: true);
+    await _settingsFile.writeAsString(jsonEncode(settings));
   }
 }

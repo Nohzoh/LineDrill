@@ -67,7 +67,7 @@ Lignes faibles attendues :
 
 - `lib/core/` : modèle et logique pure (`game_record`, `pgn_import`, `opening_tree`, `weak_lines`, `repertoire`).
 - `lib/data/` : client Chess.com, stockage des PGN, service d'import, client explorateur Lichess, stockage du répertoire et du jeton.
-- `lib/app/providers.dart` : providers Riverpod.
+- `lib/app/providers.dart` : providers Riverpod. `lib/app/board_style.dart` : apparence de l'échiquier (par défaut vert + pièces Staunty, proche de Chess.com ; jeux de pièces libres de chessground uniquement, ne pas copier les pièces propriétaires de Chess.com), stockée dans `settings.json`.
 - `lib/ui/` : `home_shell` (filtres + onglets Arbre / Points faibles / Répertoire), `tree_view` (étoile = coup de référence), `weak_lines_view`, `repertoire_view`, `explorer_sheet`, `games_sheet` (parties d'une ligne, liens Chess.com), `import_screen`, `settings_screen`.
 - Tests widget : le dossier de l'appli est remplacé par un dossier temporaire (`appDirProvider`) ; laisser finir les entrées-sorties avec `tester.runAsync` avant `pumpAndSettle`.
 - Test sur données réelles : `LINEDRILL_REF_PGN=chemin/du/pgn flutter test` (ignoré sinon). L'arbre fusionne les transpositions, donc certains comptes dépassent ceux du tableau ci-dessus (ex. Noirs 4.d4 c6 : 30 parties, 42 %).

@@ -1,7 +1,10 @@
+import 'package:chessground/chessground.dart';
+import 'package:dartchess/dartchess.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../app/board_style.dart';
 import '../app/providers.dart';
 
 /// Page de création d'un jeton Lichess, sans permission cochée.
@@ -46,6 +49,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       body: ListView(
         padding: const EdgeInsets.all(24),
         children: [
+          const _BoardSection(),
+          const SizedBox(height: 32),
           Text('Explorateur Lichess', style: theme.textTheme.titleMedium),
           const SizedBox(height: 8),
           const Text(
@@ -83,6 +88,66 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           FilledButton(onPressed: _save, child: const Text('Enregistrer')),
         ],
       ),
+    );
+  }
+}
+
+/// Choix des couleurs de l'échiquier et des pièces, avec un aperçu.
+class _BoardSection extends ConsumerWidget {
+  const _BoardSection();
+
+  // Position d'aperçu : 1.e4 e5 2.Nf3 Nc6 3.d4.
+  static const _fen = 'r1bqkbnr/pppp1ppp/2n5/4p3/3PP3/5N2/PPP2PPP/RNBQKB1R b KQkq - 0 3';
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final style = ref.watch(boardStyleProvider).value ?? const BoardStyle();
+    final notifier = ref.read(boardStyleProvider.notifier);
+    final theme = Theme.of(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('Échiquier', style: theme.textTheme.titleMedium),
+        const SizedBox(height: 12),
+        Center(
+          child: StaticChessboard(
+            size: 240,
+            orientation: Side.white,
+            fen: _fen,
+            lastMove: NormalMove.fromUci('d2d4'),
+            settings: style.settings,
+          ),
+        ),
+        const SizedBox(height: 16),
+        Text('Couleurs', style: theme.textTheme.titleSmall),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 8,
+          children: [
+            for (final t in BoardTheme.values)
+              ChoiceChip(
+                label: Text(t.label),
+                selected: style.theme == t,
+                onSelected: (_) => notifier.set(style.copyWith(theme: t)),
+              ),
+          ],
+        ),
+        const SizedBox(height: 16),
+        Text('Pièces', style: theme.textTheme.titleSmall),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 8,
+          runSpacing: 4,
+          children: [
+            for (final p in PieceStyle.values)
+              ChoiceChip(
+                label: Text(p.label),
+                selected: style.pieces == p,
+                onSelected: (_) => notifier.set(style.copyWith(pieces: p)),
+              ),
+          ],
+        ),
+      ],
     );
   }
 }

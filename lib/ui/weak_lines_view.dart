@@ -3,6 +3,7 @@ import 'package:dartchess/dartchess.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../app/board_style.dart';
 import '../app/providers.dart';
 import '../core/weak_lines.dart';
 import 'format.dart';
@@ -21,6 +22,7 @@ class WeakLinesView extends ConsumerWidget {
     final lines = ref.watch(weakLinesProvider);
     final color = ref.watch(filterProvider).color;
     final repertoire = ref.watch(repertoireProvider).value;
+    final style = ref.watch(boardStyleProvider).value ?? const BoardStyle();
     if (tree == null) return const Center(child: CircularProgressIndicator());
 
     return ListView(
@@ -45,6 +47,7 @@ class WeakLinesView extends ConsumerWidget {
             line: line,
             orientation: color,
             fen: tree.follow(line.line)!.position.fen,
+            boardSettings: style.thumbnailSettings,
             reference: line.lastMoveIsOpponent(color == Side.white)
                 ? repertoire?.lookup(color, tree.follow(line.line)!.key)?.san
                 : null,
@@ -64,6 +67,7 @@ class _WeakLineCard extends StatelessWidget {
     required this.line,
     required this.orientation,
     required this.fen,
+    required this.boardSettings,
     required this.reference,
     required this.onOpen,
   });
@@ -72,6 +76,7 @@ class _WeakLineCard extends StatelessWidget {
   final WeakLine line;
   final Side orientation;
   final String fen;
+  final StaticChessboardSettings boardSettings;
 
   /// Mon coup de référence après cette ligne, s'il existe.
   final String? reference;
@@ -97,6 +102,7 @@ class _WeakLineCard extends StatelessWidget {
                 orientation: orientation,
                 fen: fen,
                 lastMove: stats.move,
+                settings: boardSettings,
               ),
               const SizedBox(width: 12),
               Expanded(

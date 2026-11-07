@@ -2,6 +2,7 @@ import 'package:chessground/chessground.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../app/board_style.dart';
 import '../app/providers.dart';
 import '../core/opening_tree.dart';
 import '../core/repertoire.dart';
@@ -18,6 +19,7 @@ class TreeView extends ConsumerWidget {
     final tree = ref.watch(treeProvider);
     final filter = ref.watch(filterProvider);
     final username = ref.watch(gamesProvider).value?.username;
+    final style = ref.watch(boardStyleProvider).value ?? const BoardStyle();
     if (tree == null) return const Center(child: CircularProgressIndicator());
     final setLine = ref.read(lineProvider.notifier).set;
 
@@ -50,6 +52,7 @@ class TreeView extends ConsumerWidget {
                 orientation: filter.color,
                 fen: node.position.fen,
                 lastMove: reached?.move,
+                settings: style.settings,
               ),
             ),
             _LineBar(line: line, onSelect: setLine),

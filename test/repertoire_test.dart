@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:dartchess/dartchess.dart' hide File;
 import 'package:flutter_test/flutter_test.dart';
+import 'package:linedrill/app/board_style.dart';
 import 'package:linedrill/core/game_record.dart';
 import 'package:linedrill/core/opening_tree.dart';
 import 'package:linedrill/core/repertoire.dart';
@@ -97,6 +98,17 @@ void main() {
       expect(await store.lichessToken(), 'lip_abc');
       await store.setLichessToken('');
       expect(await store.lichessToken(), isNull);
+    });
+
+    test('réglages d\'affichage', () async {
+      final store = RepertoireStore(tmp);
+      expect(await store.settings(), isEmpty);
+      const style = BoardStyle(theme: BoardTheme.blue, pieces: PieceStyle.maestro);
+      await store.saveSettings({'board': style.toJson()});
+      final back = BoardStyle.fromJson(((await store.settings())['board']! as Map).cast());
+      expect(back.theme, BoardTheme.blue);
+      expect(back.pieces, PieceStyle.maestro);
+      expect(BoardStyle.fromJson({'theme': 'inconnu'}).theme, BoardTheme.green);
     });
   });
 }

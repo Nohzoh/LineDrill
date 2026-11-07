@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path_provider/path_provider.dart';
 
 import '../core/game_record.dart';
+import 'board_style.dart';
 import '../core/opening_tree.dart';
 import '../core/repertoire.dart';
 import '../core/weak_lines.dart';
@@ -155,3 +156,22 @@ final explorerClientProvider = Provider<LichessExplorerClient>((ref) {
   ref.onDispose(client.close);
   return client;
 });
+
+/// Apparence de l'échiquier, enregistrée dans les réglages.
+class BoardStyleNotifier extends AsyncNotifier<BoardStyle> {
+  @override
+  Future<BoardStyle> build() async {
+    final settings = await (await ref.watch(repertoireStoreProvider.future)).settings();
+    final board = settings['board'];
+    return board is Map ? BoardStyle.fromJson(board.cast<String, Object?>()) : const BoardStyle();
+  }
+
+  Future<void> set(BoardStyle style) async {
+    state = AsyncData(style);
+    final store = await ref.read(repertoireStoreProvider.future);
+    await store.saveSettings({...await store.settings(), 'board': style.toJson()});
+  }
+}
+
+final boardStyleProvider =
+    AsyncNotifierProvider<BoardStyleNotifier, BoardStyle>(BoardStyleNotifier.new);
