@@ -29,11 +29,23 @@ android {
         versionName = flutter.versionName
     }
 
+    // Clé de release fournie par la CI (secrets GitHub) via des variables
+    // d'environnement ; sans elles, on signe avec la clé de debug.
+    val releaseKeystore = System.getenv("LINEDRILL_KEYSTORE_PATH")?.let { file(it) }
+    signingConfigs {
+        if (releaseKeystore != null && releaseKeystore.exists()) {
+            create("release") {
+                storeFile = releaseKeystore
+                storePassword = System.getenv("LINEDRILL_KEYSTORE_PASSWORD")
+                keyAlias = System.getenv("LINEDRILL_KEY_ALIAS")
+                keyPassword = System.getenv("LINEDRILL_KEYSTORE_PASSWORD")
+            }
+        }
+    }
+
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = signingConfigs.findByName("release") ?: signingConfigs.getByName("debug")
         }
     }
 }
