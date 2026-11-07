@@ -13,11 +13,11 @@ LineDrill importe tes parties, construit l'arbre de tes ouvertures avec ton scor
 
 ## Stack
 
-Flutter · `chessground` · `dartchess` · `http` · Riverpod · stockage local en fichiers.
+Flutter · `chessground` · `dartchess` · `multistockfish` (Stockfish 19) · `http` · Riverpod · stockage local en fichiers.
 
 ## Statut
 
-Jalons 1 à 3 en place : import Chess.com, arbre navigable avec filtres, lignes faibles, répertoire avec explorateur Lichess et détection des déviations. Prochain : jalon 4, l'entraînement.
+Jalons 1 à 3 en place : import Chess.com, arbre navigable avec filtres, lignes faibles, répertoire avec explorateur Lichess et détection des déviations. Partie corrigée : répertoire puis Stockfish, avec correction coup par coup. Prochain : répétition espacée et mode réflexe.
 
 L'APK est compilé par GitHub Actions à chaque push sur `main` et publié dans les [releases](https://github.com/Nohzoh/LineDrill/releases/latest).
 
@@ -28,3 +28,7 @@ flutter pub get
 flutter test
 flutter run
 ```
+
+## Licence
+
+L'appli embarque [Stockfish](https://stockfishchess.org), sous licence GPLv3, via [multistockfish](https://github.com/lichess-org/dart-multistockfish). Distribuer l'APK implique de distribuer le code de LineDrill sous GPLv3.

@@ -4,7 +4,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_test/flutter_test.dart';
+import 'package:dartchess/dartchess.dart' hide File;
+import 'package:linedrill/app/play_controller.dart';
 import 'package:linedrill/app/providers.dart';
+import 'package:linedrill/engine/chess_engine.dart';
 import 'package:linedrill/core/pgn_import.dart';
 import 'package:linedrill/ui/games_sheet.dart';
 import 'package:linedrill/ui/home_shell.dart';
@@ -48,6 +51,7 @@ class _FakeGames extends GamesNotifier {
 void main() {
   weakLinesTests();
   repertoireTests();
+  playTests();
 
   Future<void> pump(WidgetTester tester) async {
     tester.view.physicalSize = const Size(1080, 4000);
@@ -182,4 +186,57 @@ Future<void> _settle(WidgetTester tester) async {
     await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 50)));
     await tester.pumpAndSettle();
   }
+}
+
+/// Moteur factice : toute position après un coup blanc est perdante pour les Blancs.
+class _HarshEngine implements ChessEngine {
+  @override
+  Future<List<EngineLine>> analyse(String fen, {int depth = 12, int multiPv = 1}) async {
+    final p = Chess.fromSetup(Setup.parseFen(fen));
+    final first = p.legalMoves.entries.firstWhere((e) => e.value.isNotEmpty);
+    final uci = NormalMove(from: first.key, to: first.value.squares.first).uci;
+    return [EngineLine(uci, p.turn == Side.black ? 800 : 30)];
+  }
+
+  @override
+  Future<void> dispose() async {}
+}
+
+void playTests() {
+  testWidgets('jouer : correction et rejouer', (tester) async {
+    tester.view.physicalSize = const Size(1080, 4000);
+    tester.view.devicePixelRatio = 2.5;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(ProviderScope(
+      overrides: [
+        gamesProvider.overrideWith(_WeakGames.new),
+        _tmpDir(),
+        engineProvider.overrideWith((ref) async => _HarshEngine()),
+      ],
+      child: const MaterialApp(home: HomeShell()),
+    ));
+    await _settle(tester);
+
+    await tester.tap(find.text('Jouer'));
+    await _settle(tester);
+    await tester.tap(find.text('Commencer'));
+    await _settle(tester);
+    expect(find.text('À toi de jouer'), findsOneWidget);
+    expect(find.text('Stockfish'), findsOneWidget);
+
+    final container = ProviderScope.containerOf(tester.element(find.byType(HomeShell)));
+    await tester.runAsync(() => container.read(playProvider.notifier).play(Move.parse('e2e4')!));
+    await _settle(tester);
+    expect(find.textContaining('Gaffe : 1. e4'), findsOneWidget);
+    expect(find.textContaining('Mieux : 1.'), findsOneWidget);
+
+    await tester.tap(find.text('Rejouer'));
+    await _settle(tester);
+    expect(find.textContaining('Gaffe'), findsNothing);
+    expect(find.text('À toi de jouer'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('Nouvelle partie'));
+    await _settle(tester);
+    expect(find.text('Commencer'), findsOneWidget);
+  });
 }

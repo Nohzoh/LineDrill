@@ -32,6 +32,16 @@ Appli Android Flutter d'entraînement aux ouvertures d'échecs, basée sur les p
 - `https://explorer.lichess.ovh/masters` (maîtres) et `/lichess` (bullet + blitz, tranches 1000 à 1600, soit 1000–1799 Elo).
 - Exige un jeton personnel (`Authorization: Bearer`), créé sans permission sur https://lichess.org/account/oauth/token/create ; saisi dans Réglages.
 
+## Moteur (partie corrigée)
+
+- Stockfish 19 via `multistockfish` (Lichess), saveur `light` : réseau NNUE ~1 Mo embarqué, rien à télécharger. Android et iOS seulement.
+- **Licence : Stockfish est sous GPLv3.** Distribuer l'APK oblige à distribuer le code de l'appli sous GPLv3.
+- `lib/engine/chess_engine.dart` : interface `ChessEngine` + `UciEngine` (file d'analyses, MultiPV, mats convertis par `mateScore`). `stockfish_engine.dart` : branchement sur multistockfish.
+- Roque : Stockfish parle `e1g1`, dartchess/chessground peuvent utiliser `e1h1` → toujours passer par `engineMove()` / `normalizeMove` et comparer les coups en SAN.
+- Jugement d'un coup (`judgeMove`, `lib/core/training.dart`) : perte de chances de gain (courbe Lichess), seuils 0,1 imprécision, 0,2 erreur, 0,3 gaffe. Erreur et gaffe mettent la partie en pause (rejouer ou continuer).
+- Partie (`lib/app/play_controller.dart`) : mes coups sont jugés contre mon répertoire tant qu'il couvre la position, puis par Stockfish ; l'adversaire joue les réponses de mes vraies parties tant que la position y figure, puis Stockfish à son niveau (`OpponentLevel` : profondeur + choix pondéré parmi les MultiPV).
+- Tests avec un vrai Stockfish de bureau : `LINEDRILL_STOCKFISH=chemin/stockfish flutter test` (ignorés sinon). Pour le compiler depuis les sources du plugin : copier `multistockfish_light/ios/.../StockfishLight/src` et le `.nnue`, fournir `sfio::in()/out()` (std::cin/std::cout) et un `scripts/net.sh` vide, puis `make build ARCH=x86-64`.
+
 ## Règles de l'arbre
 
 - Ne stocker que les 16 premiers demi-coups de chaque partie.
@@ -46,7 +56,7 @@ Appli Android Flutter d'entraînement aux ouvertures d'échecs, basée sur les p
 1. Import et arbre navigable avec scores, filtres couleur et cadence.
 2. Lignes faibles classées + liens vers les parties.
 3. Répertoire : coups de référence, explorateur Lichess, détection des déviations. Un coup de référence par position (FEN) et par couleur ; une partie compte comme « suivie » jusqu'à sa première déviation (`lib/core/repertoire.dart`).
-4. Entraînement : répétition espacée, modes apprentissage et réflexe.
+4. Entraînement : partie corrigée (onglet Jouer) en place ; reste la répétition espacée ciblée sur les lignes et le mode réflexe chronométré.
 
 ## Données de référence (octobre 2026, pseudo Lappeau)
 
@@ -68,7 +78,7 @@ Lignes faibles attendues :
 - `lib/core/` : modèle et logique pure (`game_record`, `pgn_import`, `opening_tree`, `weak_lines`, `repertoire`).
 - `lib/data/` : client Chess.com, stockage des PGN, service d'import, client explorateur Lichess, stockage du répertoire et du jeton.
 - `lib/app/providers.dart` : providers Riverpod. `lib/app/board_style.dart` : apparence de l'échiquier (par défaut vert + pièces Staunty, proche de Chess.com ; jeux de pièces libres de chessground uniquement, ne pas copier les pièces propriétaires de Chess.com), stockée dans `settings.json`.
-- `lib/ui/` : `home_shell` (filtres + onglets Arbre / Points faibles / Répertoire), `tree_view` (étoile = coup de référence), `weak_lines_view`, `repertoire_view`, `explorer_sheet`, `games_sheet` (parties d'une ligne, liens Chess.com), `import_screen`, `settings_screen`.
+- `lib/ui/` : `home_shell` (filtres + onglets Arbre / Points faibles / Répertoire / Jouer), `play_view` (partie corrigée), `tree_view` (étoile = coup de référence), `weak_lines_view`, `repertoire_view`, `explorer_sheet`, `games_sheet` (parties d'une ligne, liens Chess.com), `import_screen`, `settings_screen`.
 - Tests widget : le dossier de l'appli est remplacé par un dossier temporaire (`appDirProvider`) ; laisser finir les entrées-sorties avec `tester.runAsync` avant `pumpAndSettle`.
 - Test sur données réelles : `LINEDRILL_REF_PGN=chemin/du/pgn flutter test` (ignoré sinon). L'arbre fusionne les transpositions, donc certains comptes dépassent ceux du tableau ci-dessus (ex. Noirs 4.d4 c6 : 30 parties, 42 %).
 

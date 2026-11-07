@@ -52,6 +52,14 @@ class BoardStyle {
         pieceAssets: pieces.set.assets,
       );
 
+  /// Réglages de l'échiquier jouable (pas de prémouvement).
+  ChessboardSettings get interactiveSettings => ChessboardSettings(
+        colorScheme: theme.scheme,
+        pieceAssets: pieces.set.assets,
+        enableCoordinates: true,
+        enablePremoves: false,
+      );
+
   BoardStyle copyWith({BoardTheme? theme, PieceStyle? pieces}) =>
       BoardStyle(theme: theme ?? this.theme, pieces: pieces ?? this.pieces);
 

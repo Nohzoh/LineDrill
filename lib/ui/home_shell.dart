@@ -5,12 +5,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../app/providers.dart';
 import '../core/game_record.dart';
 import 'import_screen.dart';
+import 'play_view.dart';
 import 'repertoire_view.dart';
 import 'settings_screen.dart';
 import 'tree_view.dart';
 import 'weak_lines_view.dart';
 
-/// Écran principal : filtres communs, onglets Arbre et Points faibles.
+/// Écran principal : filtres communs et onglets Arbre, Points faibles, Répertoire, Jouer.
 class HomeShell extends ConsumerStatefulWidget {
   const HomeShell({super.key});
 
@@ -59,7 +60,7 @@ class _HomeShellState extends ConsumerState<HomeShell> {
         ),
         body: Column(
           children: [
-            const _Filters(),
+            if (_tab != 3) const _Filters(),
             Expanded(
               child: IndexedStack(
                 index: _tab,
@@ -67,6 +68,7 @@ class _HomeShellState extends ConsumerState<HomeShell> {
                   const TreeView(),
                   WeakLinesView(onOpenInTree: () => setState(() => _tab = 0)),
                   RepertoireView(onOpenInTree: () => setState(() => _tab = 0)),
+                  const PlayView(),
                 ],
               ),
             ),
@@ -79,6 +81,7 @@ class _HomeShellState extends ConsumerState<HomeShell> {
             NavigationDestination(icon: Icon(Icons.account_tree_outlined), label: 'Arbre'),
             NavigationDestination(icon: Icon(Icons.trending_down), label: 'Points faibles'),
             NavigationDestination(icon: Icon(Icons.star_outline), label: 'Répertoire'),
+            NavigationDestination(icon: Icon(Icons.sports_esports_outlined), label: 'Jouer'),
           ],
         ),
       ),
