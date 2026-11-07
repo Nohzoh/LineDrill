@@ -54,14 +54,16 @@ class _SetupView extends ConsumerWidget {
         const SizedBox(height: 8),
         SegmentedButton<OpponentLevel>(
           segments: [
-            for (final l in OpponentLevel.values) ButtonSegment(value: l, label: Text(l.label)),
+            for (final l in OpponentLevel.values)
+              ButtonSegment(value: l, label: Text(l.label)),
           ],
           selected: {setup.level},
           onSelectionChanged: (s) => notifier.set(level: s.first),
         ),
         const SizedBox(height: 32),
         FilledButton.icon(
-          onPressed: () => ref.read(playProvider.notifier).start(color, setup.level),
+          onPressed: () =>
+              ref.read(playProvider.notifier).start(color, setup.level),
           icon: const Icon(Icons.play_arrow),
           label: const Text('Commencer'),
         ),
@@ -78,16 +80,20 @@ class _GameView extends ConsumerStatefulWidget {
 }
 
 class _GameViewState extends ConsumerState<_GameView> {
-  late final ChessboardController _board = ChessboardController(game: _gameData(ref.read(playProvider)));
+  late final ChessboardController _board = ChessboardController(
+    game: _gameData(ref.read(playProvider)),
+  );
 
   static GameData _gameData(PlayState s) => GameData(
-        fen: s.position.fen,
-        lastMove: s.lastMove,
-        playerSide: s.userColor == Side.white ? PlayerSide.white : PlayerSide.black,
-        sideToMove: s.position.turn,
-        kingSquareInCheck: s.position.isCheck ? s.position.board.kingOf(s.position.turn) : null,
-        validMoves: s.myTurn ? makeLegalMoves(s.position) : const {},
-      );
+    fen: s.position.fen,
+    lastMove: s.lastMove,
+    playerSide: s.userColor == Side.white ? PlayerSide.white : PlayerSide.black,
+    sideToMove: s.position.turn,
+    kingSquareInCheck: s.position.isCheck
+        ? s.position.board.kingOf(s.position.turn)
+        : null,
+    validMoves: s.myTurn ? makeLegalMoves(s.position) : const {},
+  );
 
   @override
   void dispose() {
@@ -97,7 +103,10 @@ class _GameViewState extends ConsumerState<_GameView> {
 
   @override
   Widget build(BuildContext context) {
-    ref.listen(playProvider, (_, next) => _board.updatePosition(_gameData(next)));
+    ref.listen(
+      playProvider,
+      (_, next) => _board.updatePosition(_gameData(next)),
+    );
     final s = ref.watch(playProvider);
     final style = ref.watch(boardStyleProvider).value ?? const BoardStyle();
     final notifier = ref.read(playProvider.notifier);
@@ -108,7 +117,9 @@ class _GameViewState extends ConsumerState<_GameView> {
     if (pending != null && better != null) {
       final move = pending.before.parseSan(better);
       if (move is NormalMove) {
-        shapes.add(Arrow(color: const Color(0xcc15781b), orig: move.from, dest: move.to));
+        shapes.add(
+          Arrow(color: const Color(0xcc15781b), orig: move.from, dest: move.to),
+        );
       }
     }
 
@@ -117,7 +128,11 @@ class _GameViewState extends ConsumerState<_GameView> {
         final boardSize = constraints.maxWidth.clamp(0, 480).toDouble();
         return ListView(
           children: [
-            _StatusBar(state: s, onNewGame: notifier.stop),
+            _StatusBar(
+              state: s,
+              onNewGame: notifier.restart,
+              onSetup: notifier.stop,
+            ),
             Center(
               child: Chessboard(
                 size: boardSize,
@@ -136,13 +151,21 @@ class _GameViewState extends ConsumerState<_GameView> {
                 onKeep: notifier.keep,
               )
             else if (s.result != null)
-              _ResultCard(result: s.result!, corrections: s.corrections, onNewGame: notifier.stop)
+              _ResultCard(
+                result: s.result!,
+                corrections: s.corrections,
+                onNewGame: notifier.restart,
+                onSetup: notifier.stop,
+              )
             else if (s.lastVerdict != null)
               _VerdictLine(verdict: s.lastVerdict!),
             if (s.message != null)
               Padding(
                 padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
-                child: Text(s.message!, style: Theme.of(context).textTheme.bodySmall),
+                child: Text(
+                  s.message!,
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
               ),
             _MoveList(moves: s.moves),
             const SizedBox(height: 24),
@@ -154,10 +177,19 @@ class _GameViewState extends ConsumerState<_GameView> {
 }
 
 class _StatusBar extends StatelessWidget {
-  const _StatusBar({required this.state, required this.onNewGame});
+  const _StatusBar({
+    required this.state,
+    required this.onNewGame,
+    required this.onSetup,
+  });
 
   final PlayState state;
+
+  /// Nouvelle partie, mêmes couleur et niveau.
   final VoidCallback onNewGame;
+
+  /// Retour au choix de la couleur et du niveau.
+  final VoidCallback onSetup;
 
   @override
   Widget build(BuildContext context) {
@@ -166,34 +198,63 @@ class _StatusBar extends StatelessWidget {
     if (state.result != null) {
       status = 'Partie terminée';
     } else if (state.thinking) {
-      status = state.position.turn == state.userColor ? 'Analyse de ton coup…' : 'Stockfish réfléchit…';
+      status = state.position.turn == state.userColor
+          ? 'Analyse de ton coup…'
+          : 'Stockfish réfléchit…';
     } else if (state.pending != null) {
       status = 'Coup à corriger';
     } else {
       status = state.myTurn ? 'À toi de jouer' : 'Au tour de l\'adversaire';
     }
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 8, 8, 8),
-      child: Row(
+      padding: const EdgeInsets.fromLTRB(16, 4, 4, 4),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Chip(
-            avatar: Icon(
-              state.phase == PlayPhase.repertoire ? Icons.star : Icons.memory,
-              size: 18,
-            ),
-            label: Text(state.phase.label),
-            visualDensity: VisualDensity.compact,
+          Row(
+            children: [
+              Expanded(
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: Chip(
+                    avatar: Icon(
+                      state.phase == PlayPhase.repertoire
+                          ? Icons.star
+                          : Icons.memory,
+                      size: 18,
+                    ),
+                    label: Text(
+                      '${state.phase.label} · ${state.level.label}',
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    visualDensity: VisualDensity.compact,
+                  ),
+                ),
+              ),
+              IconButton(
+                tooltip: 'Changer les réglages',
+                icon: const Icon(Icons.tune),
+                onPressed: onSetup,
+              ),
+              IconButton(
+                tooltip: 'Nouvelle partie',
+                icon: const Icon(Icons.restart_alt),
+                onPressed: onNewGame,
+              ),
+            ],
           ),
-          const SizedBox(width: 12),
-          if (state.thinking) ...[
-            const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2)),
-            const SizedBox(width: 8),
-          ],
-          Expanded(child: Text(status, style: theme.textTheme.bodyMedium)),
-          IconButton(
-            tooltip: 'Nouvelle partie',
-            icon: const Icon(Icons.restart_alt),
-            onPressed: onNewGame,
+          Row(
+            children: [
+              if (state.thinking) ...[
+                const SizedBox(
+                  width: 14,
+                  height: 14,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+                const SizedBox(width: 8),
+              ],
+              Expanded(child: Text(status, style: theme.textTheme.bodyMedium)),
+            ],
           ),
         ],
       ),
@@ -222,9 +283,13 @@ class _CorrectionCard extends StatelessWidget {
     final theme = Theme.of(context);
     final verdict = pending.verdict;
     final offBook = verdict.quality == MoveQuality.offBook;
-    final color = verdict.quality == MoveQuality.blunder ? theme.colorScheme.error : Colors.orange.shade800;
+    final color = verdict.quality == MoveQuality.blunder
+        ? theme.colorScheme.error
+        : Colors.orange.shade800;
     final played = _label(moveNumber, pending.san);
-    final better = verdict.better == null ? null : _label(moveNumber, verdict.better!);
+    final better = verdict.better == null
+        ? null
+        : _label(moveNumber, verdict.better!);
     return Card(
       margin: const EdgeInsets.fromLTRB(12, 8, 12, 4),
       shape: RoundedRectangleBorder(
@@ -238,18 +303,27 @@ class _CorrectionCard extends StatelessWidget {
           children: [
             Text(
               '${verdict.quality.label} : $played',
-              style: theme.textTheme.titleSmall?.copyWith(color: color, fontWeight: FontWeight.w700),
+              style: theme.textTheme.titleSmall?.copyWith(
+                color: color,
+                fontWeight: FontWeight.w700,
+              ),
             ),
             if (better != null) ...[
               const SizedBox(height: 4),
-              Text(offBook ? 'Ton coup prévu : $better' : 'Mieux : $better (flèche verte)'),
+              Text(
+                offBook
+                    ? 'Ton coup prévu : $better'
+                    : 'Mieux : $better (flèche verte)',
+              ),
             ],
             Wrap(
               alignment: WrapAlignment.end,
               children: [
                 TextButton(
                   onPressed: onKeep,
-                  child: Text(offBook ? 'Garder mon coup' : 'Continuer quand même'),
+                  child: Text(
+                    offBook ? 'Garder mon coup' : 'Continuer quand même',
+                  ),
                 ),
                 FilledButton.icon(
                   onPressed: onRetry,
@@ -278,7 +352,8 @@ class _VerdictLine extends StatelessWidget {
       MoveQuality.inaccuracy => (Icons.info, Colors.orange.shade700),
       _ => (Icons.error, Theme.of(context).colorScheme.error),
     };
-    final hint = verdict.quality == MoveQuality.inaccuracy && verdict.better != null
+    final hint =
+        verdict.quality == MoveQuality.inaccuracy && verdict.better != null
         ? ' : ${verdict.better} était un peu mieux'
         : '';
     return Padding(
@@ -295,11 +370,17 @@ class _VerdictLine extends StatelessWidget {
 }
 
 class _ResultCard extends StatelessWidget {
-  const _ResultCard({required this.result, required this.corrections, required this.onNewGame});
+  const _ResultCard({
+    required this.result,
+    required this.corrections,
+    required this.onNewGame,
+    required this.onSetup,
+  });
 
   final String result;
   final int corrections;
   final VoidCallback onNewGame;
+  final VoidCallback onSetup;
 
   @override
   Widget build(BuildContext context) {
@@ -312,9 +393,26 @@ class _ResultCard extends StatelessWidget {
           children: [
             Text(result, style: Theme.of(context).textTheme.titleMedium),
             const SizedBox(height: 4),
-            Text(corrections == 0 ? 'Aucune correction.' : '$corrections coups corrigés.'),
+            Text(
+              corrections == 0
+                  ? 'Aucune correction.'
+                  : '$corrections coups corrigés.',
+            ),
             const SizedBox(height: 8),
-            FilledButton(onPressed: onNewGame, child: const Text('Nouvelle partie')),
+            Wrap(
+              spacing: 8,
+              children: [
+                FilledButton.icon(
+                  onPressed: onNewGame,
+                  icon: const Icon(Icons.restart_alt),
+                  label: const Text('Nouvelle partie'),
+                ),
+                OutlinedButton(
+                  onPressed: onSetup,
+                  child: const Text('Changer les réglages'),
+                ),
+              ],
+            ),
           ],
         ),
       ),
@@ -334,21 +432,37 @@ class _MoveList extends StatelessWidget {
     final theme = Theme.of(context);
     final spans = <InlineSpan>[];
     for (final (i, m) in moves.indexed) {
-      if (i.isEven) spans.add(TextSpan(text: '${i ~/ 2 + 1}. ', style: TextStyle(color: theme.colorScheme.outline)));
+      if (i.isEven) {
+        spans.add(
+          TextSpan(
+            text: '${i ~/ 2 + 1}. ',
+            style: TextStyle(color: theme.colorScheme.outline),
+          ),
+        );
+      }
       final mark = switch (m.quality) {
         MoveQuality.inaccuracy => '?!',
         MoveQuality.mistake || MoveQuality.offBook => '?',
         MoveQuality.blunder => '??',
         _ => '',
       };
-      spans.add(TextSpan(
-        text: '${m.san}$mark ',
-        style: TextStyle(fontWeight: m.side == moves.first.side ? FontWeight.w600 : FontWeight.w400),
-      ));
+      spans.add(
+        TextSpan(
+          text: '${m.san}$mark ',
+          style: TextStyle(
+            fontWeight: m.side == moves.first.side
+                ? FontWeight.w600
+                : FontWeight.w400,
+          ),
+        ),
+      );
     }
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-      child: Text.rich(TextSpan(children: spans), style: theme.textTheme.bodyMedium),
+      child: Text.rich(
+        TextSpan(children: spans),
+        style: theme.textTheme.bodyMedium,
+      ),
     );
   }
 }

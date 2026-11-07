@@ -197,6 +197,10 @@ class PlayController extends Notifier<PlayState> {
     if (color == Side.black) await _opponentTurn(id);
   }
 
+  /// Nouvelle partie avec la même couleur et le même niveau.
+  Future<void> restart() => start(state.userColor, state.level);
+
+  /// Retour aux réglages de partie.
   void stop() {
     _gameId++;
     state = const PlayState();

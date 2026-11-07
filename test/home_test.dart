@@ -226,7 +226,7 @@ void playTests() {
     await tester.tap(find.text('Commencer'));
     await _settle(tester);
     expect(find.text('À toi de jouer'), findsOneWidget);
-    expect(find.text('Stockfish'), findsOneWidget);
+    expect(find.text('Stockfish · Facile'), findsOneWidget);
 
     final container = ProviderScope.containerOf(tester.element(find.byType(HomeShell)));
     await tester.runAsync(() => container.read(playProvider.notifier).play(Move.parse('e2e4')!));
@@ -239,7 +239,15 @@ void playTests() {
     expect(find.textContaining('Gaffe'), findsNothing);
     expect(find.text('À toi de jouer'), findsOneWidget);
 
+    // Nouvelle partie : relancée tout de suite, mêmes réglages.
     await tester.tap(find.byTooltip('Nouvelle partie'));
+    await _settle(tester);
+    expect(find.text('Commencer'), findsNothing);
+    expect(find.text('À toi de jouer'), findsOneWidget);
+    expect(find.text('Stockfish · Facile'), findsOneWidget);
+    expect(container.read(playProvider).moves, isEmpty);
+
+    await tester.tap(find.byTooltip('Changer les réglages'));
     await _settle(tester);
     expect(find.text('Commencer'), findsOneWidget);
   });
@@ -273,7 +281,13 @@ void playTests() {
     // Une partie puis retour aux réglages : le choix est conservé.
     await tester.tap(find.text('Commencer'));
     await _settle(tester);
+    expect(find.textContaining('· Moyen'), findsOneWidget);
     await tester.tap(find.byTooltip('Nouvelle partie'));
+    await _settle(tester);
+    final container = ProviderScope.containerOf(tester.element(find.byType(HomeShell)));
+    expect(container.read(playProvider).userColor, Side.black);
+    expect(container.read(playProvider).level, OpponentLevel.medium);
+    await tester.tap(find.byTooltip('Changer les réglages'));
     await _settle(tester);
     expect(segmented<OpponentLevel>().selected, {OpponentLevel.medium});
 
