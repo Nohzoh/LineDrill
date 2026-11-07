@@ -36,6 +36,9 @@ class GameRecord {
     this.link,
     this.date,
     this.elo,
+    this.opponent,
+    this.opponentElo,
+    this.ending = Ending.other,
   });
 
   /// Couleur jouée par l'utilisateur.
@@ -57,4 +60,33 @@ class GameRecord {
 
   /// Elo de l'utilisateur dans cette partie.
   final int? elo;
+
+  final String? opponent;
+  final int? opponentElo;
+
+  final Ending ending;
+}
+
+/// Comment la partie s'est terminée, d'après le tag `Termination`.
+enum Ending {
+  time('au temps'),
+  checkmate('par mat'),
+  resignation('par abandon'),
+  abandoned('par abandon de partie'),
+  draw('nulle'),
+  other('');
+
+  const Ending(this.label);
+
+  final String label;
+
+  static Ending fromTermination(String? termination) {
+    final t = termination?.toLowerCase() ?? '';
+    if (t.contains('drawn') || t.contains('stalemate')) return Ending.draw;
+    if (t.contains('on time') || t.contains('timeout')) return Ending.time;
+    if (t.contains('checkmate')) return Ending.checkmate;
+    if (t.contains('resignation')) return Ending.resignation;
+    if (t.contains('abandoned')) return Ending.abandoned;
+    return Ending.other;
+  }
 }

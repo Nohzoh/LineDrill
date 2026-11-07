@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'app/providers.dart';
+import 'ui/home_shell.dart';
 import 'ui/import_screen.dart';
-import 'ui/tree_screen.dart';
 
 void main() {
   runApp(const ProviderScope(child: LineDrillApp()));
@@ -40,7 +40,7 @@ class _Home extends ConsumerWidget {
       error: (e, _) => Scaffold(body: Center(child: Text('Erreur : $e'))),
       data: (state) => state.games.isEmpty
           ? ImportScreen(initialUsername: state.username)
-          : const TreeScreen(),
+          : const HomeShell(),
     );
   }
 }

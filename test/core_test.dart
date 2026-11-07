@@ -63,6 +63,16 @@ void main() {
     });
   });
 
+  test('Ending', () {
+    expect(Ending.fromTermination('Lappeau won on time'), Ending.time);
+    expect(Ending.fromTermination('x won by checkmate'), Ending.checkmate);
+    expect(Ending.fromTermination('x won by resignation'), Ending.resignation);
+    expect(Ending.fromTermination('x won - game abandoned'), Ending.abandoned);
+    expect(Ending.fromTermination('Game drawn by timeout vs insufficient material'), Ending.draw);
+    expect(Ending.fromTermination('Game drawn by repetition'), Ending.draw);
+    expect(Ending.fromTermination(null), Ending.other);
+  });
+
   group('parseGames', () {
     final games = parseGames(_pgn, 'lappeau');
 

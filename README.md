@@ -17,7 +17,7 @@ Flutter · `chessground` · `dartchess` · SQLite via `drift` · `http` · River
 
 ## Statut
 
-Jalon 1 (import Chess.com + arbre navigable avec filtres) en place. Prochain : jalon 2, classement des lignes faibles.
+Jalons 1 et 2 en place : import Chess.com, arbre navigable avec filtres, classement des lignes faibles et liens vers les parties. Prochain : jalon 3, le répertoire.
 
 ## Lancer
 

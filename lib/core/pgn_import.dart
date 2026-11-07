@@ -62,5 +62,8 @@ GameRecord? gameToRecord(PgnGame<PgnNodeData> game, String usernameLower) {
     link: h['Link'],
     date: h['UTCDate'] ?? h['Date'],
     elo: int.tryParse(h[color == Side.white ? 'WhiteElo' : 'BlackElo'] ?? ''),
+    opponent: h[color == Side.white ? 'Black' : 'White'],
+    opponentElo: int.tryParse(h[color == Side.white ? 'BlackElo' : 'WhiteElo'] ?? ''),
+    ending: Ending.fromTermination(h['Termination']),
   );
 }

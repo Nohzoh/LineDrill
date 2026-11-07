@@ -32,7 +32,9 @@ Appli Android Flutter d'entraînement aux ouvertures d'échecs, basée sur les p
 - Ne stocker que les 16 premiers demi-coups de chaque partie.
 - Indexer les positions par FEN sans les compteurs de coups (4 premiers champs) pour fusionner les transpositions.
 - Score du point de vue de l'utilisateur : 1 victoire, 0,5 nulle, 0 défaite.
-- Ligne faible : coût = (0,5 − score) × nombre de parties, minimum 10 parties.
+- Ligne faible : coût = (score moyen de l'arbre filtré − score) × nombre de parties, minimum 10 parties. La référence est la moyenne et non 50 %, sinon 1.e4 (658 parties à 48 %) arrive en tête.
+- Une suite quasi forcée est raccourcie (1.e4 g6 plutôt que 1.e4 g6 2.Nf3) ; une sous-ligne n'est gardée que si elle est au moins 5 points plus basse que sa ligne parente retenue (`lib/core/weak_lines.dart`).
+- Rapport en console : `dart run tool/weak_lines_report.dart <pgn> <pseudo>`.
 
 ## Jalons
 
@@ -58,10 +60,10 @@ Lignes faibles attendues :
 
 ## Code
 
-- `lib/core/` : modèle et logique pure (`game_record`, `pgn_import`, `opening_tree`).
+- `lib/core/` : modèle et logique pure (`game_record`, `pgn_import`, `opening_tree`, `weak_lines`).
 - `lib/data/` : client Chess.com, stockage des PGN, service d'import.
 - `lib/app/providers.dart` : providers Riverpod.
-- `lib/ui/` : écrans.
+- `lib/ui/` : `home_shell` (filtres + onglets Arbre / Points faibles), `tree_view`, `weak_lines_view`, `games_sheet` (parties d'une ligne, liens Chess.com), `import_screen`.
 - Test sur données réelles : `LINEDRILL_REF_PGN=chemin/du/pgn flutter test` (ignoré sinon). L'arbre fusionne les transpositions, donc certains comptes dépassent ceux du tableau ci-dessus (ex. Noirs 4.d4 c6 : 30 parties, 42 %).
 
 ## Conventions
