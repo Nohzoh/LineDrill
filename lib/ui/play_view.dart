@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../app/board_style.dart';
 import '../app/play_controller.dart';
 import '../app/providers.dart';
+import '../core/explain.dart';
 import '../core/training.dart';
 
 /// Partie corrigée : réglages, puis partie avec correction coup par coup.
@@ -117,10 +118,13 @@ class _GameViewState extends ConsumerState<_GameView> {
     if (pending != null && better != null) {
       final move = pending.before.parseSan(better);
       if (move is NormalMove) {
-        shapes.add(
-          Arrow(color: const Color(0xcc15781b), orig: move.from, dest: move.to),
-        );
+        shapes.add(Arrow(color: _green, orig: move.from, dest: move.to));
       }
+    }
+    // Réponse adverse la plus forte après mon coup, sur la position affichée.
+    final threat = pending?.verdict.explanation?.threat;
+    if (threat is NormalMove) {
+      shapes.add(Arrow(color: _red, orig: threat.from, dest: threat.to));
     }
 
     return LayoutBuilder(
@@ -316,6 +320,11 @@ class _CorrectionCard extends StatelessWidget {
                     : 'Mieux : $better (flèche verte)',
               ),
             ],
+            if (verdict.explanation case final explanation?
+                when !explanation.isEmpty) ...[
+              const SizedBox(height: 8),
+              _ExplanationText(explanation: explanation, showsArrows: true),
+            ],
             Wrap(
               alignment: WrapAlignment.end,
               children: [
@@ -339,13 +348,28 @@ class _CorrectionCard extends StatelessWidget {
   }
 }
 
-class _VerdictLine extends StatelessWidget {
+/// Verdict sur mon dernier coup, avec « Pourquoi ? » quand il est moins bon.
+class _VerdictLine extends StatefulWidget {
   const _VerdictLine({required this.verdict});
 
   final MoveVerdict verdict;
 
   @override
+  State<_VerdictLine> createState() => _VerdictLineState();
+}
+
+class _VerdictLineState extends State<_VerdictLine> {
+  bool _open = false;
+
+  @override
+  void didUpdateWidget(_VerdictLine old) {
+    super.didUpdateWidget(old);
+    if (old.verdict != widget.verdict) _open = false;
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final verdict = widget.verdict;
     final (icon, color) = switch (verdict.quality) {
       MoveQuality.book => (Icons.star, Colors.amber.shade700),
       MoveQuality.good => (Icons.check_circle, Colors.green.shade600),
@@ -356,18 +380,90 @@ class _VerdictLine extends StatelessWidget {
         verdict.quality == MoveQuality.inaccuracy && verdict.better != null
         ? ' : ${verdict.better} était un peu mieux'
         : '';
+    final explanation = verdict.explanation;
+    final canExplain = explanation != null && !explanation.isEmpty;
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
-      child: Row(
+      padding: const EdgeInsets.fromLTRB(16, 8, 8, 4),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(icon, color: color, size: 20),
-          const SizedBox(width: 8),
-          Expanded(child: Text('${verdict.quality.label}$hint')),
+          Row(
+            children: [
+              Icon(icon, color: color, size: 20),
+              const SizedBox(width: 8),
+              Expanded(child: Text('${verdict.quality.label}$hint')),
+              if (canExplain)
+                TextButton(
+                  onPressed: () => setState(() => _open = !_open),
+                  child: Text(_open ? 'Masquer' : 'Pourquoi ?'),
+                ),
+            ],
+          ),
+          if (canExplain && _open)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(28, 4, 8, 4),
+              child: _ExplanationText(explanation: explanation, showsArrows: false),
+            ),
         ],
       ),
     );
   }
 }
+
+/// Conséquences de mon coup, puis ce que le meilleur coup apportait.
+class _ExplanationText extends StatelessWidget {
+  const _ExplanationText({required this.explanation, required this.showsArrows});
+
+  final MoveExplanation explanation;
+
+  /// Les flèches sont visibles sur l'échiquier (coup en attente).
+  final bool showsArrows;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final small = theme.textTheme.bodySmall;
+    Widget bullet(String text) => Padding(
+          padding: const EdgeInsets.only(bottom: 2),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('•  '),
+              Expanded(child: Text(text)),
+            ],
+          ),
+        );
+    Widget line(String label, String moves, Color color) => Padding(
+          padding: const EdgeInsets.only(top: 2, bottom: 6),
+          child: Text.rich(
+            TextSpan(children: [
+              TextSpan(text: '$label : ', style: small),
+              TextSpan(
+                text: moves,
+                style: small?.copyWith(color: color, fontWeight: FontWeight.w600),
+              ),
+            ]),
+          ),
+        );
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        for (final c in explanation.consequences) bullet(c),
+        if (explanation.refutation.isNotEmpty)
+          line(
+            showsArrows ? 'Suite probable (flèche rouge)' : 'Suite probable après ton coup',
+            explanation.refutation,
+            _red,
+          ),
+        for (final m in explanation.missed) bullet(m),
+        if (explanation.bestLine.isNotEmpty) line('Ligne conseillée', explanation.bestLine, _green),
+      ],
+    );
+  }
+}
+
+const _green = Color(0xcc15781b);
+const _red = Color(0xccb3261e);
 
 class _ResultCard extends StatelessWidget {
   const _ResultCard({

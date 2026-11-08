@@ -60,8 +60,21 @@ void main() {
       final blunder = await judgeMove(engine, before, Move.parse('d1g4')!, depth: 10);
       expect(blunder.quality, MoveQuality.blunder);
       expect(blunder.better, isNotNull);
+      expect(blunder.explanation!.consequences, contains('Au bout de la suite, tu perds une dame.'));
+      expect(blunder.explanation!.refutation, startsWith('2… Bxg4'));
       final fine = await judgeMove(engine, before, Move.parse('d2d4')!, depth: 10);
       expect(fine.quality.needsCorrection, isFalse);
+    });
+
+    test('explique un mat raté', () async {
+      // 1.e4 e5 2.Qh5 Nc6 3.Bc4 Nf6?? : 4.Qxf7# était possible.
+      final before = Chess.fromSetup(Setup.parseFen(
+        'r1bqkb1r/pppp1ppp/2n2n2/4p2Q/2B1P3/8/PPPP1PPP/RNB1K1NR w KQkq - 4 4',
+      ));
+      final verdict = await judgeMove(engine, before, Move.parse('d2d3')!, depth: 10);
+      expect(verdict.quality, MoveQuality.blunder);
+      expect(verdict.explanation!.missed, ['Tu avais un mat immédiat : Qxf7#.']);
+      expect(verdict.explanation!.consequences.first, contains('Ta dame en h5 était attaquée'));
     });
 
     test('reconnaît le roque quelle que soit sa notation', () async {

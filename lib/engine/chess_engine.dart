@@ -1,12 +1,14 @@
 import 'dart:async';
 
 /// Une ligne d'analyse : premier coup en UCI et évaluation en centipions,
-/// du point de vue du camp au trait.
+/// du point de vue du camp au trait, avec la suite prévue ([pv], en UCI,
+/// premier coup compris).
 class EngineLine {
-  const EngineLine(this.uci, this.cp);
+  const EngineLine(this.uci, this.cp, [List<String>? pv]) : pv = pv ?? const [];
 
   final String uci;
   final int cp;
+  final List<String> pv;
 
   @override
   String toString() => '$uci ($cp)';
@@ -89,7 +91,7 @@ class _Search {
     final tokens = line.split(' ');
     var pvIndex = 1;
     int? cp;
-    String? first;
+    List<String>? pv;
     var bound = false;
     for (var i = 0; i < tokens.length; i++) {
       switch (tokens[i]) {
@@ -102,10 +104,13 @@ class _Search {
         case 'lowerbound' || 'upperbound':
           bound = true;
         case 'pv':
-          if (i + 1 < tokens.length) first = tokens[i + 1];
+          pv = tokens.sublist(i + 1).where((t) => t.isNotEmpty).toList();
+          i = tokens.length;
       }
     }
-    if (cp != null && first != null && !bound) _lines[pvIndex] = EngineLine(first, cp);
+    if (cp != null && pv != null && pv.isNotEmpty && !bound) {
+      _lines[pvIndex] = EngineLine(pv.first, cp, pv);
+    }
   }
 
   void finish() {

@@ -233,6 +233,7 @@ void playTests() {
     await _settle(tester);
     expect(find.textContaining('Gaffe : 1. e4'), findsOneWidget);
     expect(find.textContaining('Mieux : 1.'), findsOneWidget);
+    expect(find.textContaining('La position se dégrade'), findsOneWidget);
 
     await tester.tap(find.text('Rejouer'));
     await _settle(tester);

@@ -21,6 +21,7 @@ void main() {
       ..add('bestmove e2e4 ponder e7e5');
     final lines = await result;
     expect(lines.map((l) => '${l.uci} ${l.cp}'), ['e2e4 30', 'd2d4 12']);
+    expect(lines.first.pv, ['e2e4', 'e7e5']);
   });
 
   test('mat converti en très grand score', () async {

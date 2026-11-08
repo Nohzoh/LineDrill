@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:dartchess/dartchess.dart';
 
 import '../engine/chess_engine.dart';
+import 'explain.dart';
 import 'opening_tree.dart';
 
 /// Chances de gain entre −1 et 1 pour une évaluation en centipions
@@ -98,7 +99,10 @@ int _weightedIndex(List<double> weights, math.Random random) {
 
 /// Verdict sur un coup de l'utilisateur.
 class MoveVerdict {
-  const MoveVerdict(this.quality, {this.better, this.loss = 0});
+  const MoveVerdict(this.quality, {this.better, this.loss = 0, this.explanation});
+
+  MoveVerdict withExplanation(MoveExplanation? explanation) =>
+      MoveVerdict(quality, better: better, loss: loss, explanation: explanation);
 
   final MoveQuality quality;
 
@@ -108,6 +112,9 @@ class MoveVerdict {
 
   /// Perte de chances de gain (0 à 2).
   final double loss;
+
+  /// Pourquoi le coup est moins bon (imprécision, erreur, gaffe).
+  final MoveExplanation? explanation;
 }
 
 /// Juge un coup à partir des lignes du moteur avant le coup.
@@ -145,9 +152,13 @@ Future<MoveVerdict> judgeMove(ChessEngine engine, Position before, Move move, {i
   final (after, playedSan) = before.makeSan(normalized);
   if (playedSan == bestSan) return const MoveVerdict(MoveQuality.good);
   final int playedCp;
+
+  /// Suite du moteur après mon coup (adversaire au trait).
+  var refutation = const <String>[];
   final known = lines.where((l) => sanOf(l.uci) == playedSan).firstOrNull;
   if (known != null) {
     playedCp = known.cp;
+    refutation = known.pv.skip(1).toList();
   } else if (after.isCheckmate) {
     playedCp = mateScore(1);
   } else if (after.isGameOver) {
@@ -155,6 +166,22 @@ Future<MoveVerdict> judgeMove(ChessEngine engine, Position before, Move move, {i
   } else {
     final reply = await engine.analyse(after.fen, depth: depth);
     playedCp = reply.isEmpty ? 0 : -reply.first.cp;
+    if (reply.isNotEmpty) refutation = reply.first.pv;
   }
-  return judgeEngineMove(bestLine: best, playedCp: playedCp, playedUci: normalized.uci, bestSan: bestSan);
+  final verdict = judgeEngineMove(bestLine: best, playedCp: playedCp, playedUci: normalized.uci, bestSan: bestSan);
+  if (verdict.quality == MoveQuality.good) return verdict;
+
+  // La ligne MultiPV du coup joué est souvent courte : on redemande une
+  // suite complète pour pouvoir l'expliquer.
+  if (refutation.length < 4 && !after.isGameOver) {
+    final reply = await engine.analyse(after.fen, depth: depth);
+    if (reply.isNotEmpty) refutation = reply.first.pv;
+  }
+  return verdict.withExplanation(explainMove(
+    before: before,
+    move: normalized,
+    best: best,
+    refutation: refutation,
+    playedCp: playedCp,
+  ));
 }
