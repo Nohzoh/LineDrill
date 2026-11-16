@@ -407,6 +407,24 @@ OpeningBook _testBook() {
   });
 }
 
+/// Moteur factice : tout se vaut, sauf 2. Nf3 contre la Sicilienne, qui perd
+/// gros là où 2. d4 est le meilleur coup.
+class _SicilianEngine implements ChessEngine {
+  @override
+  Future<List<EngineLine>> analyse(String fen, {int depth = 12, int multiPv = 1}) async {
+    final p = Chess.fromSetup(Setup.parseFen(fen));
+    final moves = fen.split(' ').first;
+    if (moves == 'rnbqkbnr/pp1ppppp/8/2p5/4P3/8/PPPP1PPP/RNBQKBNR') return [const EngineLine('d2d4', 40)];
+    if (moves == 'rnbqkbnr/pp1ppppp/8/2p5/4P3/5N2/PPPP1PPP/RNBQKB1R') return [const EngineLine('d7d6', 400)];
+    final first = p.legalMoves.entries.firstWhere((e) => e.value.isNotEmpty);
+    final uci = NormalMove(from: first.key, to: first.value.squares.first).uci;
+    return [EngineLine(uci, p.turn == Side.white ? 20 : -20)];
+  }
+
+  @override
+  Future<void> dispose() async {}
+}
+
 void openingsTests() {
   testWidgets('mes ouvertures : familles, coups connus, retour à l\'arbre', (tester) async {
     tester.view.physicalSize = const Size(1080, 4000);
@@ -449,6 +467,51 @@ void openingsTests() {
     expect(find.textContaining('Cette ligne : 20 parties · 45 %'), findsOneWidget);
     expect(find.text('2. Nf3'), findsOneWidget);
     expect(find.text('2. d4'), findsOneWidget);
+  });
+
+  testWidgets('mes ouvertures : Stockfish corrige un coup, puis le répertoire est créé', (tester) async {
+    tester.view.physicalSize = const Size(1080, 4000);
+    tester.view.devicePixelRatio = 2.5;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(ProviderScope(
+      overrides: [
+        gamesProvider.overrideWith(_OpeningGames.new),
+        _tmpDir(),
+        openingBookProvider.overrideWith((ref) async => _testBook()),
+        engineProvider.overrideWith((ref) async => _SicilianEngine()),
+      ],
+      child: const MaterialApp(home: HomeShell()),
+    ));
+    await _settle(tester);
+
+    await tester.tap(find.text('Répertoire'));
+    await _settle(tester);
+    await tester.tap(find.text('Mes ouvertures'));
+    await _settle(tester);
+
+    // Deux passages du moteur, chacun suivi d'une écriture sur disque.
+    await tester.tap(find.text('Vérifier mes coups'));
+    final verified = find.textContaining('Coups vérifiés par Stockfish : 1 coup à corriger.');
+    for (var i = 0; i < 5 && verified.evaluate().isEmpty; i++) {
+      await _settle(tester);
+    }
+    expect(verified, findsOneWidget);
+    expect(find.text('Tu joues 2. Nf3 (55 %) : gaffe. Mieux : 2. d4.'), findsOneWidget);
+    expect(find.text('1. e4 c5 2. d4'), findsOneWidget);
+
+    // Le message n'arrive qu'une fois le répertoire écrit sur disque.
+    await tester.tap(find.text('Ajouter 3 coups au répertoire'));
+    final added = find.textContaining('3 coups ajoutés');
+    for (var i = 0; i < 5 && added.evaluate().isEmpty; i++) {
+      await _settle(tester);
+    }
+    expect(added, findsOneWidget);
+    expect(find.textContaining('Rien à ajouter'), findsOneWidget);
+    expect(find.text('Ton répertoire prévoit 2. d4, tu joues surtout 2. Nf3 (55 %).'), findsOneWidget);
+
+    final container = ProviderScope.containerOf(tester.element(find.byType(HomeShell, skipOffstage: false)));
+    final repertoire = container.read(repertoireProvider).value!;
+    expect({for (final e in repertoire.entries) e.line.join(' '): e.san}, {'': 'e4', 'e4 c5': 'd4', 'e4 e5': 'Nf3'});
   });
 
   testWidgets('mes ouvertures : trop peu de parties', (tester) async {

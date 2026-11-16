@@ -1,4 +1,6 @@
-import 'package:dartchess/dartchess.dart';
+import 'dart:io';
+
+import 'package:dartchess/dartchess.dart' hide File;
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:linedrill/core/game_record.dart';
@@ -6,6 +8,8 @@ import 'package:linedrill/core/opening_report.dart';
 import 'package:linedrill/core/opening_tree.dart';
 import 'package:linedrill/core/openings.dart';
 import 'package:linedrill/core/repertoire.dart';
+import 'package:linedrill/core/training.dart';
+import 'package:linedrill/data/repertoire_store.dart';
 
 List<GameRecord> _repeat(int n, String moves, double score, {Side color = Side.white}) => List.generate(
       n,
@@ -27,6 +31,7 @@ OpeningReport _report(
   Side color = Side.white,
   OpeningBook book = OpeningBook.empty,
   Repertoire? repertoire,
+  Map<String, HabitCheck> checks = const {},
   int minGames = 5,
 }) =>
     openingReport(
@@ -34,8 +39,15 @@ OpeningReport _report(
       color: color,
       book: book,
       repertoire: repertoire,
+      checks: checks,
       minGames: minGames,
     );
+
+const _good = HabitCheck(MoveQuality.good);
+
+/// Avis sur le coup [san] joué après la ligne [line].
+MapEntry<String, HabitCheck> _check(String line, String san, HabitCheck check) =>
+    MapEntry(habitCheckKey(_key(line), san), check);
 
 void main() {
   group('OpeningBook', () {
@@ -257,6 +269,157 @@ void main() {
       expect(_report(_repeat(661, 'e4', 1), minGames: 7).minGames, 7);
       // Un seuil nul ne fait pas chercher un coup là où aucune partie ne continue.
       expect(_report(_repeat(2, 'e4 e5', 1), minGames: 0).families.single.variants.single.line, ['e4', 'e5']);
+    });
+  });
+
+  group('habitudes vérifiées par Stockfish', () {
+    // Après 1. e4 e5 : 2. Qh5 dans 12 parties, 2. Nf3 dans 6.
+    final games = [..._repeat(12, 'e4 e5 Qh5 Nc6', 0), ..._repeat(6, 'e4 e5 Nf3 Nc6', 1)];
+    OpeningVariant only(OpeningReport report) => report.families.single.variants.single;
+
+    test('sans avis : mon premier coup à faire vérifier, la suite attend son verdict', () {
+      final report = _report(games);
+      expect(report.unchecked.map((h) => h.move.san), ['e4']);
+      expect(report.steps.map((s) => s.reference), ['e4']);
+      // Le bilan, lui, montre déjà toute la variante.
+      expect(only(report).line.join(' '), 'e4 e5 Qh5 Nc6');
+      expect(only(report).knownDepth, 2);
+
+      final next = _report(games, checks: Map.fromEntries([_check('', 'e4', _good)]));
+      expect(next.unchecked.map((h) => h.move.san), ['Qh5']);
+      expect(next.steps.map((s) => s.reference), ['e4', 'Qh5']);
+    });
+
+    test('la ligne d\'une position vient de l\'ordre de coups le plus joué', () {
+      final report = _report(
+        [
+          ..._repeat(6, 'e4 e6 d4 d5', 1, color: Side.black),
+          ..._repeat(60, 'e4 e6 Nf3 d5', 1, color: Side.black),
+          ..._repeat(50, 'd4 e6 e4 d5', 0, color: Side.black),
+          ..._repeat(10, 'd4 e6 c4 d5', 1, color: Side.black),
+        ],
+        color: Side.black,
+        checks: Map.fromEntries([
+          _check('e4', 'e6', _good),
+          _check('d4', 'e6', _good),
+          _check('e4 e6 d4', 'd5', _good),
+          _check('e4 e6 Nf3', 'd5', _good),
+          _check('d4 e6 c4', 'd5', _good),
+        ]),
+      );
+      expect(report.unchecked, isEmpty);
+      final french = report.steps.singleWhere((s) => s.node.key == _key('e4 e6 d4'));
+      expect(french.line, ['d4', 'e6', 'e4']);
+    });
+
+    test('coup habituel mauvais : remplacé par un autre de mes coups réguliers', () {
+      final bad = Map.fromEntries([
+        _check('', 'e4', _good),
+        _check('e4 e5', 'Qh5', const HabitCheck(MoveQuality.mistake, better: 'Nc3')),
+      ]);
+      // Le coup suivant est proposé, mais attend encore son avis.
+      final pending = _report(games, checks: bad);
+      expect(pending.unchecked.single.move.san, 'Nf3');
+      expect(pending.unchecked.single.key, habitCheckKey(_key('e4 e5'), 'Nf3'));
+
+      final report = _report(games, checks: {...bad, ...Map.fromEntries([_check('e4 e5', 'Nf3', _good)])});
+      expect(report.unchecked, isEmpty);
+      final variant = only(report);
+      expect(variant.line.join(' '), 'e4 e5 Nf3 Nc6');
+      expect(variant.count, 6);
+      expect(variant.knownDepth, 1);
+      final gap = variant.gap!;
+      expect(gap.status, HabitStatus.toFix);
+      expect(gap.played.san, 'Qh5');
+      expect(gap.check!.quality, MoveQuality.mistake);
+      expect(gap.reference, 'Nf3');
+    });
+
+    test('aucun de mes coups ne tient : celui du moteur, sans cacher ce que je joue', () {
+      final report = _report(games, checks: Map.fromEntries([
+        _check('', 'e4', _good),
+        _check('e4 e5', 'Qh5', const HabitCheck(MoveQuality.blunder, better: 'Nc3')),
+        _check('e4 e5', 'Nf3', const HabitCheck(MoveQuality.mistake, better: 'Nc3')),
+      ]));
+      expect(report.unchecked, isEmpty);
+      expect(only(report).line.join(' '), 'e4 e5 Qh5 Nc6');
+      expect(only(report).gap!.reference, 'Nc3');
+      expect(only(report).gap!.status, HabitStatus.toFix);
+      // Le coup du moteur entre au répertoire, pas ce qui suit mon mauvais coup.
+      final entries = habitEntries(report, Side.white, Repertoire());
+      expect({for (final e in entries) e.line.join(' '): e.san}, {'': 'e4', 'e4 e5': 'Nc3'});
+    });
+
+    test('une imprécision reste mon coup', () {
+      final report = _report(games, checks: Map.fromEntries([
+        _check('', 'e4', _good),
+        _check('e4 e5', 'Qh5', const HabitCheck(MoveQuality.inaccuracy, better: 'Nf3')),
+      ]));
+      expect(report.unchecked, isEmpty);
+      expect(only(report).gap, isNull);
+      expect(report.steps.last.reference, 'Qh5');
+    });
+
+    test('un coup joué moins d\'une fois sur cinq n\'est pas proposé', () {
+      final rare = [..._repeat(12, 'e4 e5 Qh5 Nc6', 0), ..._repeat(2, 'e4 e5 Nf3 Nc6', 1)];
+      final report = _report(rare, checks: Map.fromEntries([
+        _check('', 'e4', _good),
+        _check('e4 e5', 'Qh5', const HabitCheck(MoveQuality.mistake, better: 'Nc3')),
+      ]));
+      expect(report.unchecked, isEmpty);
+      expect(only(report).gap!.reference, 'Nc3');
+    });
+
+    test('le répertoire passe avant : pas d\'avis demandé, pas de coup ajouté', () {
+      final repertoire = Repertoire([
+        RepertoireEntry(color: Side.white, positionKey: _key('e4 e5'), san: 'Nf3', line: const ['e4', 'e5']),
+      ]);
+      final report = _report(games, repertoire: repertoire, checks: Map.fromEntries([_check('', 'e4', _good)]));
+      expect(report.unchecked, isEmpty);
+      expect(only(report).gap!.status, HabitStatus.offRepertoire);
+
+      final entries = habitEntries(report, Side.white, repertoire);
+      expect(entries.single.positionKey, _key(''));
+      expect(entries.single.san, 'e4');
+      expect(entries.single.line, isEmpty);
+    });
+
+    test('coups de référence tirés du bilan : une entrée par position, coup corrigé compris', () {
+      final report = _report(games, checks: Map.fromEntries([
+        _check('', 'e4', _good),
+        _check('e4 e5', 'Qh5', const HabitCheck(MoveQuality.mistake, better: 'Nc3')),
+        _check('e4 e5', 'Nf3', _good),
+      ]));
+      final entries = habitEntries(report, Side.white, Repertoire());
+      expect({for (final e in entries) e.line.join(' '): e.san}, {'': 'e4', 'e4 e5': 'Nf3'});
+      expect(entries.every((e) => e.color == Side.white), isTrue);
+    });
+
+    test('avis gardés sur disque, fichier abîmé traité comme vide', () async {
+      final tmp = await Directory.systemTemp.createTemp('linedrill');
+      addTearDown(() => tmp.delete(recursive: true));
+      final store = RepertoireStore(tmp);
+      expect(await store.loadHabitChecks(depth: 12), isEmpty);
+      await store.saveHabitChecks({
+        'a|e4': _good,
+        'b|Qh5': const HabitCheck(MoveQuality.blunder, better: 'Nf3'),
+      }, depth: 12);
+      final back = await RepertoireStore(tmp).loadHabitChecks(depth: 12);
+      expect(back['a|e4']!.isError, isFalse);
+      expect(back['a|e4']!.better, isNull);
+      expect(back['b|Qh5']!.quality, MoveQuality.blunder);
+      expect(back['b|Qh5']!.better, 'Nf3');
+
+      // Avis rendus à une autre profondeur : à refaire.
+      expect(await store.loadHabitChecks(depth: 16), isEmpty);
+
+      File('${tmp.path}/habits.json').writeAsStringSync(
+          '{"depth": 12, "checks": {"a|e4": {"quality": "inconnue"}, "b|Qh5": 3, "c|d4": {"quality": "good"}}}');
+      expect((await store.loadHabitChecks(depth: 12)).keys, ['c|d4']);
+      for (final broken in ['{"depth": 12, "checks": {', '{"depth": 12}', '[]']) {
+        File('${tmp.path}/habits.json').writeAsStringSync(broken);
+        expect(await store.loadHabitChecks(depth: 12), isEmpty, reason: broken);
+      }
     });
   });
 }

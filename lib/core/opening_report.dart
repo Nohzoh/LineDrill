@@ -6,6 +6,42 @@ import 'game_record.dart';
 import 'opening_tree.dart';
 import 'openings.dart';
 import 'repertoire.dart';
+import 'training.dart';
+
+/// Avis de Stockfish sur un de mes coups dans une position.
+class HabitCheck {
+  const HabitCheck(this.quality, {this.better});
+
+  final MoveQuality quality;
+
+  /// Meilleur coup du moteur, en SAN, quand ce n'est pas le coup jugé.
+  final String? better;
+
+  /// Erreur ou gaffe : le coup est à remplacer. Une imprécision reste jouable.
+  bool get isError => quality == MoveQuality.mistake || quality == MoveQuality.blunder;
+
+  Map<String, Object?> toJson() => {'quality': quality.name, if (better != null) 'better': better};
+
+  /// `null` si l'avis est illisible (qualité inconnue).
+  static HabitCheck? fromJson(Map<String, Object?> json) {
+    final quality = MoveQuality.values.asNameMap()[json['quality']];
+    final better = json['better'];
+    return quality == null ? null : HabitCheck(quality, better: better is String ? better : null);
+  }
+}
+
+/// Clé d'un avis : la position (clé `positionKey`) et le coup en SAN.
+String habitCheckKey(String positionKey, String san) => '$positionKey|$san';
+
+/// Un de mes coups que Stockfish n'a pas encore jugé.
+class UncheckedHabit {
+  const UncheckedHabit(this.node, this.move);
+
+  final PositionNode node;
+  final MoveStats move;
+
+  String get key => habitCheckKey(node.key, move.san);
+}
 
 /// Ce que mes parties disent d'un de mes coups dans une variante.
 enum HabitStatus {
@@ -17,18 +53,25 @@ enum HabitStatus {
 
   /// Mon répertoire prévoit un autre coup que celui que je joue le plus.
   offRepertoire,
+
+  /// Stockfish juge mon coup habituel mauvais : un autre coup est à retenir.
+  toFix,
 }
 
 /// Une position d'une variante où c'est à moi de jouer.
 class HabitStep {
   const HabitStep({
+    required this.node,
     required this.line,
     required this.reached,
     required this.played,
     required this.alternative,
     required this.reference,
     required this.status,
+    this.check,
   });
+
+  final PositionNode node;
 
   /// Coups depuis la position initiale jusqu'à cette position.
   final List<String> line;
@@ -42,10 +85,14 @@ class HabitStep {
   /// Mon autre coup le plus joué, s'il y en a un.
   final MoveStats? alternative;
 
-  /// Coup à retenir, en SAN : celui du répertoire, sinon mon coup habituel.
+  /// Coup à retenir, en SAN : celui du répertoire, sinon mon coup habituel,
+  /// remplacé si Stockfish le juge mauvais.
   final String reference;
 
   final HabitStatus status;
+
+  /// Avis de Stockfish sur [played], s'il a été demandé.
+  final HabitCheck? check;
 
   /// Part des parties où j'ai joué [played].
   double get share => played.count / reached;
@@ -98,13 +145,36 @@ class OpeningFamily {
 
 /// Mes ouvertures, de la plus jouée à la moins jouée.
 class OpeningReport {
-  const OpeningReport(this.families, this.minGames);
+  const OpeningReport(this.families, this.minGames, {this.steps = const [], this.unchecked = const []});
 
   final List<OpeningFamily> families;
 
   /// Nombre de parties à partir duquel une réponse adverse fait une variante.
   final int minGames;
+
+  /// Les positions où mon répertoire me mène, une fois chacune : celles du
+  /// bilan atteintes en ne suivant que des coups à retenir. Les variantes
+  /// montrent aussi ce que je joue sous un coup à abandonner ; pas cette liste.
+  final List<HabitStep> steps;
+
+  /// Mes coups qui attendent l'avis de Stockfish. Tant qu'il en reste, les
+  /// coups à retenir sont provisoires et [steps] s'arrête à eux : rien n'est
+  /// demandé sous un coup qui peut encore être remplacé.
+  final List<UncheckedHabit> unchecked;
 }
+
+/// Coups de référence à ajouter au [repertoire] : le coup à retenir de chaque
+/// position de [OpeningReport.steps] (bilan de [color]) qui n'en a pas encore.
+List<RepertoireEntry> habitEntries(OpeningReport report, Side color, Repertoire repertoire) => [
+      for (final step in report.steps)
+        if (repertoire.lookup(color, step.node.key) == null)
+          RepertoireEntry(
+            color: color,
+            positionKey: step.node.key,
+            san: step.reference,
+            line: List.unmodifiable(step.line),
+          ),
+    ];
 
 /// Famille des variantes qu'aucune position nommée ne traverse.
 const unnamedFamily = 'Autres lignes';
@@ -132,11 +202,20 @@ int habitMinGames(int games) => (games / 60).round().clamp(5, 10);
 /// parties (au pour cent près, comme à l'affichage) et s'accorde avec le
 /// répertoire. Chaque partie compte dans une seule ouverture : celle de la
 /// position la plus profonde de son chemin que le parcours a traversée.
+///
+/// Là où le répertoire ne dit rien, [checks] (avis de Stockfish, par
+/// [habitCheckKey]) corrige mes habitudes : le coup à retenir est le premier
+/// de mes coups réguliers, du plus joué au moins joué, qui ne soit ni une
+/// erreur ni une gaffe ; à défaut, le meilleur coup du moteur. Sous un coup
+/// à retenir que je ne joue pas assez pour être suivi, la variante reste
+/// celle de mes parties mais sort du répertoire : ses positions ne sont ni
+/// vérifiées ni proposées ([OpeningReport.steps]).
 OpeningReport openingReport(
   OpeningTree tree, {
   required Side color,
   OpeningBook book = OpeningBook.empty,
   Repertoire? repertoire,
+  Map<String, HabitCheck> checks = const {},
   int? minGames,
 }) {
   final threshold = math.max(1, minGames ?? habitMinGames(tree.games.length));
@@ -145,10 +224,14 @@ OpeningReport openingReport(
   // position d'arrivée.
   final familyAt = <String, String?>{};
   final found = <String, ({List<String> line, OpeningName? name, List<HabitStep> steps, int flow})>{};
+  final stepAt = <String, ({HabitStep step, int flow})>{};
+  final unchecked = <String, UncheckedHabit>{};
 
   // [flow] : le coup le moins joué du chemin, qui départage deux ordres de
   // coups vers la même position. [path] : positions déjà traversées, une
-  // répétition de coups ne doit pas faire tourner en rond.
+  // répétition de coups ne doit pas faire tourner en rond. [onBook] : le
+  // chemin n'a suivi que des coups à retenir, la position est donc de
+  // celles où mon répertoire me mène, pour ce qui en est déjà vérifié.
   void walk(
     PositionNode node,
     List<String> line,
@@ -156,6 +239,7 @@ OpeningReport openingReport(
     OpeningName? name,
     Set<String> path,
     int flow,
+    bool onBook,
   ) {
     name = book.nameOf(node.key) ?? name;
     familyAt.putIfAbsent(node.key, () => name?.family);
@@ -179,6 +263,7 @@ OpeningReport openingReport(
           name,
           {...path, reply.childKey},
           math.min(flow, reply.count),
+          onBook,
         );
       }
       return;
@@ -190,22 +275,47 @@ OpeningReport openingReport(
     // À égalité de parties, le coup du répertoire est mon coup habituel.
     final starred = star == null ? null : node.move(star);
     final played = starred != null && starred.count == moves.first.count ? starred : moves.first;
-    final reference = star ?? played.san;
+    var reference = star;
+    // Tant qu'un avis manque, le coup à retenir peut encore changer.
+    var settled = true;
+    if (reference == null && onBook) {
+      for (final move in moves.take(3)) {
+        // Moins d'une partie sur cinq : pas une habitude à garder.
+        if (move != played && move.count * 5 < reached) break;
+        final key = habitCheckKey(node.key, move.san);
+        final check = checks[key];
+        if (check == null) {
+          unchecked.putIfAbsent(key, () => UncheckedHabit(node, move));
+          settled = false;
+        }
+        if (check == null || !check.isError) {
+          reference = move.san;
+          break;
+        }
+      }
+      reference ??= checks[habitCheckKey(node.key, played.san)]?.better;
+    }
+    reference ??= played.san;
     final step = HabitStep(
+      node: node,
       line: line,
       reached: reached,
       played: played,
       alternative: moves.where((m) => m != played).firstOrNull,
       reference: reference,
       status: reference != played.san
-          ? HabitStatus.offRepertoire
+          ? (star == null ? HabitStatus.toFix : HabitStatus.offRepertoire)
           : (played.count * 100 / reached).round() < (habitShare * 100).round()
               ? HabitStatus.hesitant
               : HabitStatus.known,
+      check: onBook ? checks[habitCheckKey(node.key, played.san)] : null,
     );
-    // Un coup du répertoire que je ne joue presque jamais ne doit pas
-    // cacher les ouvertures que je joue vraiment en dessous.
-    final next = starred != null && starred.count >= threshold ? starred : played;
+    // Comme pour les variantes, le chemin le plus joué donne sa ligne.
+    if (onBook && (stepAt[node.key]?.flow ?? -1) < flow) stepAt[node.key] = (step: step, flow: flow);
+    // Un coup à retenir que je ne joue presque jamais ne doit pas cacher
+    // les ouvertures que je joue vraiment en dessous.
+    final kept = node.move(reference);
+    final next = kept != null && kept.count >= threshold ? kept : played;
     if (path.contains(next.childKey)) return end([...steps, step]);
     walk(
       tree.node(next.childKey)!,
@@ -214,10 +324,11 @@ OpeningReport openingReport(
       name,
       {...path, next.childKey},
       math.min(flow, next.count),
+      onBook && settled && next == kept,
     );
   }
 
-  walk(tree.root, const [], const [], null, {tree.rootKey}, tree.games.length);
+  walk(tree.root, const [], const [], null, {tree.rootKey}, tree.games.length, true);
 
   // Un seul passage sur les parties : celles de chaque variante (arrivées au
   // bout de sa ligne) et celles de chaque ouverture.
@@ -252,5 +363,10 @@ OpeningReport openingReport(
         gamesOf[entry.key] ?? const [],
       ),
   ]..sort((a, b) => b.count.compareTo(a.count));
-  return OpeningReport(families, threshold);
+  return OpeningReport(
+    families,
+    threshold,
+    steps: [for (final (:step, flow: _) in stepAt.values) step],
+    unchecked: unchecked.values.toList(),
+  );
 }

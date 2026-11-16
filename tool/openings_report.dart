@@ -22,7 +22,7 @@ void main(List<String> args) {
         final reason = gap == null
             ? ''
             : '  [${gap.status.name} : ${gap.played.san} ${(gap.share * 100).round()} %'
-                '${gap.reference == gap.played.san ? '' : ', répertoire ${gap.reference}'}]';
+                '${gap.reference == gap.played.san ? '' : ', à retenir ${gap.reference}'}]';
         print('  ${v.count.toString().padLeft(4)}  ${(v.score * 100).round().toString().padLeft(3)} %  '
             '${v.knownDepth}/${v.steps.length}  ${v.line.join(' ')}  (${v.name?.variation ?? '-'})$reason');
       }

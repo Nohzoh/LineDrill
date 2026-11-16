@@ -2,6 +2,7 @@ import 'package:dartchess/dartchess.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../app/habit_controller.dart';
 import '../app/providers.dart';
 import '../core/opening_report.dart';
 import '../core/pgn_import.dart';
@@ -59,6 +60,7 @@ class OpeningsScreen extends ConsumerWidget {
                     style: theme.textTheme.bodyMedium,
                   ),
                 ),
+                if (report.families.isNotEmpty) _HabitPanel(report: report, color: color),
                 for (final (i, family) in report.families.indexed)
                   _FamilyCard(
                     // Sans clé propre à la couleur, l'état ouvert ou fermé d'une
@@ -70,6 +72,89 @@ class OpeningsScreen extends ConsumerWidget {
                   ),
               ],
             ),
+    );
+  }
+}
+
+/// Vérification de mes coups habituels par Stockfish, puis ajout au répertoire.
+class _HabitPanel extends ConsumerWidget {
+  const _HabitPanel({required this.report, required this.color});
+
+  final OpeningReport report;
+  final Side color;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final check = ref.watch(habitCheckProvider);
+    final repertoire = ref.watch(repertoireProvider).value;
+    if (repertoire == null) return const SizedBox.shrink();
+    final theme = Theme.of(context);
+    // Une vérification, ou son erreur, ne concerne que le bilan (la couleur)
+    // où elle a été lancée ; un seul lancement à la fois.
+    final here = check.color == color;
+    final running = check.running && here;
+    final error = here ? check.error : null;
+    final String text;
+    Widget? action;
+
+    if (running) {
+      text = 'Stockfish vérifie tes coups habituels : ${check.done} sur ${check.total}.';
+    } else if (report.unchecked.isNotEmpty) {
+      text = error != null
+          ? 'Vérification impossible : $error'
+          : 'Stockfish peut vérifier tes coups habituels et remplacer ceux qui perdent du terrain, '
+              'avant d\'en faire ton répertoire.'
+              '${check.running ? ' Il termine d\'abord l\'autre couleur.' : ''}';
+      action = FilledButton.icon(
+        onPressed: check.running ? null : () => ref.read(habitCheckProvider.notifier).start(),
+        icon: const Icon(Icons.fact_check_outlined, size: 18),
+        label: Text(error != null ? 'Réessayer' : 'Vérifier mes coups'),
+      );
+    } else {
+      final entries = habitEntries(report, color, repertoire);
+      final fixes = report.steps.where((s) => s.status == HabitStatus.toFix).length;
+      if (entries.isEmpty) {
+        text = 'Rien à ajouter : là où ton répertoire te mène, chaque position a déjà son coup de référence.';
+      } else {
+        final verdict = switch (fixes) {
+          0 => 'rien à corriger',
+          1 => '1 coup à corriger',
+          _ => '$fixes coups à corriger',
+        };
+        text = 'Coups vérifiés par Stockfish : $verdict. Ajoute-les à ton répertoire pour les réviser.';
+        final n = entries.length;
+        action = FilledButton.icon(
+          onPressed: () async {
+            await ref.read(repertoireProvider.notifier).addMissing(entries);
+            if (!context.mounted) return;
+            ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+              content: Text('${n == 1 ? '1 coup ajouté' : '$n coups ajoutés'}. Révise-les dans l\'onglet Répertoire.'),
+            ));
+          },
+          icon: const Icon(Icons.star, size: 18),
+          label: Text(n == 1 ? 'Ajouter 1 coup au répertoire' : 'Ajouter $n coups au répertoire'),
+        );
+      }
+    }
+
+    return Card(
+      margin: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+      color: theme.colorScheme.secondaryContainer,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(text),
+            if (running)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                child: LinearProgressIndicator(value: check.total == 0 ? 0 : check.done / check.total),
+              ),
+            if (action != null) Align(alignment: Alignment.centerRight, child: action),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -208,6 +293,9 @@ String _gapText(OpeningVariant variant) {
   final played = '${moveLabel(ply, gap.played.san)} (${percent(gap.share)})';
   if (gap.status == HabitStatus.offRepertoire) {
     return 'Ton répertoire prévoit ${moveLabel(ply, gap.reference)}, tu joues surtout $played.';
+  }
+  if (gap.status == HabitStatus.toFix) {
+    return 'Tu joues $played : ${gap.check!.quality.label.toLowerCase()}. Mieux : ${moveLabel(ply, gap.reference)}.';
   }
   // Hésitation : un autre coup prend forcément le reste des parties.
   final other = gap.alternative!;

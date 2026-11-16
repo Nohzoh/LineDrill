@@ -11,6 +11,7 @@ import '../core/opening_report.dart';
 import '../core/opening_tree.dart';
 import '../core/openings.dart';
 import '../core/repertoire.dart';
+import '../core/training.dart';
 import '../core/weak_lines.dart';
 import '../data/chesscom_client.dart';
 import '../data/game_store.dart';
@@ -126,6 +127,12 @@ class RepertoireNotifier extends AsyncNotifier<Repertoire> {
             line: List.unmodifiable(line),
           )));
 
+  /// Ajoute [entries] là où il n'y a pas encore de coup de référence.
+  Future<void> addMissing(List<RepertoireEntry> entries) => _save((r) => Repertoire([
+        ...r.entries,
+        ...entries.where((e) => r.lookup(e.color, e.positionKey) == null),
+      ]));
+
   Future<void> remove(Side color, String key) => _save((r) => r.without(color, key));
 }
 
@@ -146,18 +153,36 @@ final openingBookProvider = FutureProvider<OpeningBook>(
   (ref) async => OpeningBook.parse(await rootBundle.loadString('assets/openings.tsv', cache: false)),
 );
 
-/// Bilan des ouvertures de l'arbre filtré ; `null` tant que les parties ou
-/// la table des noms chargent.
+/// Avis de Stockfish sur mes coups habituels, gardés d'une fois sur l'autre.
+class HabitChecksNotifier extends AsyncNotifier<Map<String, HabitCheck>> {
+  @override
+  Future<Map<String, HabitCheck>> build() async =>
+      (await ref.watch(repertoireStoreProvider.future)).loadHabitChecks(depth: judgeDepth);
+
+  Future<void> addAll(Map<String, HabitCheck> checks) async {
+    final next = {...await future, ...checks};
+    state = AsyncData(next);
+    await (await ref.read(repertoireStoreProvider.future)).saveHabitChecks(next, depth: judgeDepth);
+  }
+}
+
+final habitChecksProvider =
+    AsyncNotifierProvider<HabitChecksNotifier, Map<String, HabitCheck>>(HabitChecksNotifier.new);
+
+/// Bilan des ouvertures de l'arbre filtré ; `null` tant que les parties, la
+/// table des noms ou les avis de Stockfish chargent.
 final openingReportProvider = Provider<OpeningReport?>((ref) {
   final tree = ref.watch(treeProvider);
   final book = ref.watch(openingBookProvider);
-  if (tree == null || book.isLoading) return null;
+  final checks = ref.watch(habitChecksProvider);
+  if (tree == null || book.isLoading || checks.isLoading) return null;
   return openingReport(
     tree,
     color: ref.watch(filterProvider).color,
     // Table illisible : le bilan reste juste, les variantes ne sont simplement pas nommées.
     book: book.value ?? OpeningBook.empty,
     repertoire: ref.watch(repertoireProvider).value,
+    checks: checks.value ?? const {},
   );
 });
 
