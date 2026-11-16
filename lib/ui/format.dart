@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 /// `1. e4` pour un coup blanc, `1… e5` pour un coup noir.
 String moveLabel(int ply, String san) {
