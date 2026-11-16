@@ -9,6 +9,8 @@ import 'package:dartchess/dartchess.dart' hide File;
 import 'package:linedrill/app/drill_controller.dart';
 import 'package:linedrill/app/play_controller.dart';
 import 'package:linedrill/app/providers.dart';
+import 'package:linedrill/core/opening_tree.dart';
+import 'package:linedrill/core/openings.dart';
 import 'package:linedrill/core/training.dart';
 import 'package:linedrill/engine/chess_engine.dart';
 import 'package:linedrill/core/pgn_import.dart';
@@ -56,6 +58,7 @@ void main() {
   repertoireTests();
   playTests();
   drillTests();
+  openingsTests();
 
   Future<void> pump(WidgetTester tester) async {
     tester.view.physicalSize = const Size(1080, 4000);
@@ -369,5 +372,107 @@ void drillTests() {
     await tester.tap(find.text('Suivant'));
     await _settle(tester);
     expect(find.text('2 / 2'), findsOneWidget);
+  });
+}
+
+class _OpeningGames extends GamesNotifier {
+  @override
+  Future<GamesState> build() async => GamesState(
+        username: 'Lappeau',
+        games: parseGames(
+          [
+            _many(11, '1. e4 c5 2. Nf3', '0-1'),
+            _many(9, '1. e4 c5 2. d4', '1-0'),
+            _many(10, '1. e4 e5 2. Nf3', '1-0'),
+          ].join('\n'),
+          'Lappeau',
+        ),
+      );
+}
+
+/// Table des noms réduite aux positions du test.
+OpeningBook _testBook() {
+  String key(List<String> sans) {
+    Position p = Chess.initial;
+    for (final san in sans) {
+      p = p.play(p.parseSan(san)!);
+    }
+    return positionKey(p);
+  }
+
+  return OpeningBook({
+    key(['e4', 'c5']): 'Sicilian Defense',
+    key(['e4', 'e5']): 'King\'s Pawn Game',
+    key(['e4', 'e5', 'Nf3']): 'King\'s Knight Opening',
+  });
+}
+
+void openingsTests() {
+  testWidgets('mes ouvertures : familles, coups connus, retour à l\'arbre', (tester) async {
+    tester.view.physicalSize = const Size(1080, 4000);
+    tester.view.devicePixelRatio = 2.5;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(ProviderScope(
+      overrides: [
+        gamesProvider.overrideWith(_OpeningGames.new),
+        _tmpDir(),
+        openingBookProvider.overrideWith((ref) async => _testBook()),
+      ],
+      child: const MaterialApp(home: HomeShell()),
+    ));
+    await _settle(tester);
+
+    await tester.tap(find.text('Répertoire'));
+    await _settle(tester);
+    await tester.tap(find.text('Mes ouvertures'));
+    await _settle(tester);
+
+    // La plus jouée d'abord, ouverte ; la suivante repliée.
+    expect(find.text('Sicilian Defense'), findsOneWidget);
+    expect(find.text('20 parties · 45 % · 1 coup connu', findRichText: true), findsOneWidget);
+    expect(find.text('King\'s Knight Opening'), findsOneWidget);
+    expect(find.text('10 parties · 100 % · 2 coups connus', findRichText: true), findsOneWidget);
+    expect(find.text('1. e4 c5 2. Nf3'), findsOneWidget);
+    expect(find.text('11 parties · 0 %', findRichText: true), findsOneWidget);
+    expect(find.text('1 coup connu sur 2'), findsOneWidget);
+    expect(find.text('Ensuite tu hésites : 2. Nf3 (55 %) ou 2. d4 (45 %).'), findsOneWidget);
+
+    await tester.tap(find.text('King\'s Knight Opening'));
+    await _settle(tester);
+    expect(find.text('1. e4 e5 2. Nf3'), findsOneWidget);
+    expect(find.text('Au-delà, pas assez de parties pour juger.'), findsOneWidget);
+
+    // Une variante ouvre l'arbre là où l'habitude s'arrête.
+    await tester.tap(find.text('1. e4 c5 2. Nf3'));
+    await _settle(tester);
+    expect(find.text('Mes ouvertures'), findsNothing);
+    expect(find.textContaining('Cette ligne : 20 parties · 45 %'), findsOneWidget);
+    expect(find.text('2. Nf3'), findsOneWidget);
+    expect(find.text('2. d4'), findsOneWidget);
+  });
+
+  testWidgets('mes ouvertures : trop peu de parties', (tester) async {
+    tester.view.physicalSize = const Size(1080, 4000);
+    tester.view.devicePixelRatio = 2.5;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(ProviderScope(
+      overrides: [
+        gamesProvider.overrideWith(_FakeGames.new),
+        _tmpDir(),
+        openingBookProvider.overrideWith((ref) async => _testBook()),
+      ],
+      child: const MaterialApp(home: HomeShell()),
+    ));
+    await _settle(tester);
+
+    await tester.tap(find.text('Répertoire'));
+    await _settle(tester);
+    await tester.tap(find.text('Mes ouvertures'));
+    await _settle(tester);
+    expect(find.textContaining('Pas encore assez de parties avec cette couleur'), findsOneWidget);
+
+    await tester.tap(find.text('Noirs'));
+    await _settle(tester);
+    expect(find.textContaining('une variante compte à partir de 5 parties'), findsOneWidget);
   });
 }

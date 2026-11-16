@@ -99,8 +99,7 @@ class OpeningTree {
   PositionNode? node(String key) => _nodes[key];
 
   /// Score global des parties retenues, entre 0 et 1.
-  double get score =>
-      games.isEmpty ? 0 : games.fold<double>(0, (sum, g) => sum + g.score) / games.length;
+  double get score => meanScore(games);
 
   /// Suit une ligne en SAN depuis la position initiale.
   PositionNode? follow(List<String> sans) {

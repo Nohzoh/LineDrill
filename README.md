@@ -19,6 +19,8 @@ Flutter · `chessground` · `dartchess` · `multistockfish` (Stockfish 19) · `f
 
 Jalons 1 à 3 en place : import Chess.com, arbre navigable avec filtres, lignes faibles, répertoire avec explorateur Lichess et détection des déviations. Jalon 4 : partie corrigée (répertoire puis Stockfish, correction coup par coup) et révisions en répétition espacée (FSRS), en mode apprentissage ou réflexe chronométré.
 
+Bilan des ouvertures (Répertoire → Mes ouvertures) : tes ouvertures les plus jouées, nommées, avec pour chaque variante le nombre de coups que tu joues par habitude.
+
 L'APK est compilé par GitHub Actions à chaque push sur `main` et publié dans les [releases](https://github.com/Nohzoh/LineDrill/releases/latest).
 
 ## Lancer
@@ -32,3 +34,5 @@ flutter run
 ## Licence
 
 L'appli embarque [Stockfish](https://stockfishchess.org), sous licence GPLv3, via [multistockfish](https://github.com/lichess-org/dart-multistockfish). Distribuer l'APK implique de distribuer le code de LineDrill sous GPLv3.
+
+Les noms d'ouvertures viennent de [lichess-org/chess-openings](https://github.com/lichess-org/chess-openings), placé dans le domaine public (CC0).

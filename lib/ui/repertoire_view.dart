@@ -8,6 +8,7 @@ import '../core/repertoire.dart';
 import 'format.dart';
 import 'drill_screen.dart';
 import 'games_sheet.dart';
+import 'openings_screen.dart';
 
 /// Coups de référence de la couleur filtrée et leur respect dans mes parties.
 class RepertoireView extends ConsumerWidget {
@@ -42,6 +43,19 @@ class RepertoireView extends ConsumerWidget {
                 : '${entries.length} coups de référence · '
                     '${reached == 0 ? 'pas encore rencontrés dans tes parties' : 'respectés dans ${percent(followed / reached)} des cas'}',
             style: Theme.of(context).textTheme.bodyMedium,
+          ),
+        ),
+        Card(
+          margin: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+          clipBehavior: Clip.antiAlias,
+          child: ListTile(
+            leading: const Icon(Icons.menu_book_outlined),
+            title: const Text('Mes ouvertures'),
+            subtitle: const Text('Ce que tu joues le plus, et jusqu\'où tu le connais.'),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(
+              builder: (_) => OpeningsScreen(onOpenInTree: onOpenInTree),
+            )),
           ),
         ),
         if (entries.isNotEmpty) const _DrillPanel(),
