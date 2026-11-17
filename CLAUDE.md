@@ -3,20 +3,21 @@
 ## Projet
 
 Appli Android Flutter d'entraînement aux ouvertures d'échecs, basée sur les parties Chess.com de l'utilisateur.
+
 - Package Android : `io.nohzoh.linedrill`
 - Tout en local : pas de serveur, pas de compte.
 - UI en français.
 
 ## Stack
 
-| Couche | Choix |
-| --- | --- |
-| Échiquier | `chessground` |
-| Règles, PGN, FEN | `dartchess` |
-| Stockage | Fichiers dans le dossier privé de l'appli : PGN mensuels bruts, `repertoire.json`, `drill.json`, `settings.json`, `lichess_token.txt`. Pas de SQLite tant que les volumes restent de quelques Ko (`drift` à reconsidérer si besoin) |
-| Réseau | `http` |
-| Répétition espacée | FSRS (paquet `fsrs`) |
-| État | Riverpod |
+| Couche             | Choix                                                                                                                                                                                                                                              |
+| ------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Échiquier          | `chessground`                                                                                                                                                                                                                                      |
+| Règles, PGN, FEN   | `dartchess`                                                                                                                                                                                                                                        |
+| Stockage           | Fichiers dans le dossier privé de l'appli : PGN mensuels bruts, `repertoire.json`, `drill.json`, `habits.json`, `settings.json`, `lichess_token.txt`. Pas de SQLite tant que les volumes restent de quelques Ko (`drift` à reconsidérer si besoin) |
+| Réseau             | `http`                                                                                                                                                                                                                                             |
+| Répétition espacée | FSRS (paquet `fsrs`)                                                                                                                                                                                                                               |
+| État               | Riverpod                                                                                                                                                                                                                                           |
 
 ## Données Chess.com
 
@@ -52,6 +53,19 @@ Appli Android Flutter d'entraînement aux ouvertures d'échecs, basée sur les p
 - Une suite quasi forcée est raccourcie (1.e4 g6 plutôt que 1.e4 g6 2.Nf3) ; une sous-ligne n'est gardée que si elle est au moins 5 points plus basse que sa ligne parente retenue (`lib/core/weak_lines.dart`).
 - Rapport en console : `dart run tool/weak_lines_report.dart <pgn> <pseudo>`.
 
+## Bilan des ouvertures
+
+- Noms : `assets/openings.tsv` (position → nom), tiré de [lichess-org/chess-openings](https://github.com/lichess-org/chess-openings) (CC0) et limité aux 16 demi-coups de l'arbre. Noms en anglais ; la famille est ce qui précède les deux-points. Régénérer : `dart run tool/build_openings.dart <dossier des a.tsv … e.tsv> > assets/openings.tsv`.
+- `openingReport` (`lib/core/opening_report.dart`) : depuis la position initiale, ouvre une variante par réponse adverse vue dans au moins N parties ; de mon côté un seul coup est suivi, l'étoile du répertoire si je la joue dans au moins N parties, sinon mon coup le plus joué (une étoile que je ne joue pas ne doit pas cacher ce que je joue). N = parties de la couleur ÷ 60, borné entre 5 et 10 : 10 comme les lignes faibles, moins après un premier import.
+- Un coup est « connu » s'il est joué dans au moins 60 % des parties (au pour cent près, comme à l'affichage) et s'accorde avec le répertoire. La profondeur connue d'une variante compte les coups connus d'affilée depuis le début (8 au plus, l'arbre s'arrêtant à 16 demi-coups).
+- Parties d'une variante = parties arrivées au bout de sa ligne, quel que soit l'ordre des coups. Deux ordres de coups qui se rejoignent ne font qu'une variante, celle du chemin le plus joué.
+- Une partie compte dans une seule ouverture : celle de la position la plus profonde de son chemin que le parcours a traversée. Une ouverture compte donc aussi les parties qui quittent ses variantes en route (réponse adverse rare, autre coup de ma part).
+- Rapport en console : `dart run tool/openings_report.dart <pgn> <pseudo>`.
+- Vérification par Stockfish (bouton « Vérifier mes coups », `lib/app/habit_controller.dart`) : là où le répertoire ne dit rien, mes coups réguliers sont jugés par `judgeMove` à profondeur 12 (sans explication, `explain: false`), du plus joué au moins joué (trois au plus, chacun joué au moins une fois sur cinq, le plus joué toujours). Le coup à retenir est le premier qui n'est ni une erreur ni une gaffe, à défaut le meilleur coup du moteur ; une imprécision est gardée. Le moteur avance niveau par niveau : rien n'est demandé sous un coup qui attend encore son avis, et le contrôleur repasse tant que le bilan en demande. Un lancement garde la couleur et le filtre de son départ, et ce qu'il a jugé si le moteur tombe en route.
+- Les avis sont gardés dans `habits.json` (clé : position + coup) avec la profondeur d'analyse (`judgeDepth`, la même qu'en partie corrigée) ; ils sont écrits tous les dix coups jugés. Ce n'est qu'un cache : un fichier illisible, ou rendu à une autre profondeur, est traité comme vide. Une analyse vide ou sans réponse au bout de 30 s arrête la vérification plutôt que d'être gardée comme « bon coup ».
+- « Ajouter au répertoire » crée un coup de référence pour chaque position du bilan qui n'en a pas, sans jamais en remplacer un. Sous un coup à retenir que je ne joue pas assez pour être suivi, le bilan montre encore mes parties, mais ces positions sortent du répertoire : ni vérifiées ni ajoutées.
+- Écran : Répertoire → « Mes ouvertures » (`lib/ui/openings_screen.dart`).
+
 ## Jalons
 
 1. Import et arbre navigable avec scores, filtres couleur et cadence.
@@ -68,27 +82,27 @@ Appli Android Flutter d'entraînement aux ouvertures d'échecs, basée sur les p
 Pour valider les jalons 1 et 2 : 1 322 parties, toutes en bullet 1+0, score global 50,6 % (Blancs 48,5 %, Noirs 52,6 %).
 Lignes faibles attendues :
 
-| Couleur | Ligne | Parties | Score |
-| --- | --- | --- | --- |
-| Blancs | 1.e4 g6 | 26 | 25 % |
-| Blancs | 1.e4 d5 2.exd5 Qxd5 3.Nc3 Qe6+ / Qe5+ | 25 | 32 % |
-| Blancs | 1.e4 d5 2.exd5 Qxd5 3.Nc3 Qd8 | 35 | 40 % |
-| Blancs | 1.e4 c6 | 50 | 41 % |
-| Blancs | 1.e4 e5 2.Nf3 Nc6 3.d4 Nf6 | 37 | 45 % |
-| Noirs | 1.e4 d5 2.exd5 Qxd5 3.Nc3 Qa5 4.d4 c6 | 27 | 35 % |
-| Noirs | 1.d4 d5 2.e3 | 21 | 38 % |
+| Couleur | Ligne                                 | Parties | Score |
+| ------- | ------------------------------------- | ------- | ----- |
+| Blancs  | 1.e4 g6                               | 26      | 25 %  |
+| Blancs  | 1.e4 d5 2.exd5 Qxd5 3.Nc3 Qe6+ / Qe5+ | 25      | 32 %  |
+| Blancs  | 1.e4 d5 2.exd5 Qxd5 3.Nc3 Qd8         | 35      | 40 %  |
+| Blancs  | 1.e4 c6                               | 50      | 41 %  |
+| Blancs  | 1.e4 e5 2.Nf3 Nc6 3.d4 Nf6            | 37      | 45 %  |
+| Noirs   | 1.e4 d5 2.exd5 Qxd5 3.Nc3 Qa5 4.d4 c6 | 27      | 35 %  |
+| Noirs   | 1.d4 d5 2.e3                          | 21      | 38 %  |
 
 ## Code
 
-- `lib/core/` : modèle et logique pure (`game_record`, `pgn_import`, `opening_tree`, `weak_lines`, `repertoire`).
+- `lib/core/` : modèle et logique pure (`game_record`, `pgn_import`, `opening_tree`, `weak_lines`, `repertoire`, `openings`, `opening_report`).
 - `lib/data/` : client Chess.com, stockage des PGN, service d'import, client explorateur Lichess, stockage du répertoire et du jeton.
-- `lib/app/providers.dart` : providers Riverpod. `lib/app/board_style.dart` : apparence de l'échiquier (par défaut vert + pièces Staunty, proche de Chess.com ; jeux de pièces libres de chessground uniquement, ne pas copier les pièces propriétaires de Chess.com), stockée dans `settings.json` (clé `board`). Couleur et niveau de la partie corrigée : `playSetupProvider`, clé `play`.
-- `lib/ui/` : `home_shell` (filtres + onglets Arbre / Points faibles / Répertoire / Jouer), `play_view` (partie corrigée), `builder_screen` (préparation automatique), `explanation_view` (explications partagées), `tree_view` (étoile = coup de référence), `weak_lines_view`, `repertoire_view`, `explorer_sheet`, `games_sheet` (parties d'une ligne, liens Chess.com), `import_screen`, `settings_screen`.
-- Tests widget : le dossier de l'appli est remplacé par un dossier temporaire (`appDirProvider`) ; laisser finir les entrées-sorties avec `tester.runAsync` avant `pumpAndSettle`. Ne pas attendre une méthode de notifier qui fait `await future` à l'intérieur de `runAsync` (blocage) : la lancer avec `unawaited` puis faire avancer les zones.
+- `lib/app/providers.dart` : providers Riverpod. `lib/app/habit_controller.dart` : vérification de mes coups habituels par Stockfish. `lib/app/board_style.dart` : apparence de l'échiquier (par défaut vert + pièces Staunty, proche de Chess.com ; jeux de pièces libres de chessground uniquement, ne pas copier les pièces propriétaires de Chess.com), stockée dans `settings.json` (clé `board`). Couleur et niveau de la partie corrigée : `playSetupProvider`, clé `play`.
+- `lib/ui/` : `home_shell` (filtres + onglets Arbre / Points faibles / Répertoire / Jouer), `play_view` (partie corrigée), `builder_screen` (préparation automatique), `explanation_view` (explications partagées), `tree_view` (étoile = coup de référence), `weak_lines_view`, `repertoire_view`, `openings_screen` (bilan des ouvertures), `explorer_sheet`, `games_sheet` (parties d'une ligne, liens Chess.com), `import_screen`, `settings_screen`.
+- Tests widget : la table des noms d'ouvertures est remplacée par une table réduite (`openingBookProvider`). Le dossier de l'appli est remplacé par un dossier temporaire (`appDirProvider`) ; laisser finir les entrées-sorties avec `tester.runAsync` avant `pumpAndSettle`. Ne pas attendre une méthode de notifier qui fait `await future` à l'intérieur de `runAsync` (blocage) : la lancer avec `unawaited` puis faire avancer les zones. Pour un provider au type nullable, ne pas écrire `return container.read(provider)!` : le type attendu perd son `?` et Riverpod lève une `NoSuchMethodError` (`_listenedElement`) ; lire dans une variable, puis `!`.
 - Test sur données réelles : `LINEDRILL_REF_PGN=chemin/du/pgn flutter test` (ignoré sinon). L'arbre fusionne les transpositions, donc certains comptes dépassent ceux du tableau ci-dessus (ex. Noirs 4.d4 c6 : 30 parties, 42 %).
 
 ## Conventions
 
 - Logique métier (import, parsing, arbre, planification) en Dart pur, testée avec `flutter test`, séparée de l'UI.
 - Messages de commit en anglais.
-- CI : Flutter figé sur 3.47.9 dans `.github/workflows/build-apk.yml` (même version qu’en local). Flutter 3.50 déclare `package:flutter/material.dart` obsolète au profit de `package:material_ui` : migration à faire en montant la version.
+- CI : Flutter figé sur 3.47.9 dans `.github/workflows/build-apk.yml` (même version qu’en local). Flutter 3.50 déclare `package:flutter/material.dart` obsolète au profit de `package:material_ui` : Material est déjà importé depuis `material_ui` partout (analyse et tests passent en 3.47.9 comme en 3.50.0), il ne reste qu'à monter la version.

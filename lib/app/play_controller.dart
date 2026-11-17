@@ -58,9 +58,6 @@ final playSetupProvider = AsyncNotifierProvider<PlaySetupNotifier, PlaySetup>(Pl
 /// Hasard des choix adverses (remplaçable en test).
 final randomProvider = Provider<math.Random>((ref) => math.Random());
 
-/// Profondeur d'analyse pour juger mes coups.
-const _judgeDepth = 12;
-
 enum PlayPhase {
   /// Je joue mes coups de référence contre les réponses de mes vraies parties.
   repertoire('Répertoire'),
@@ -243,7 +240,7 @@ class PlayController extends Notifier<PlayState> {
     state = state.copyWith(position: after, lastMove: move, thinking: true, message: () => null);
     final MoveVerdict verdict;
     try {
-      verdict = await judgeMove(await _engine, before, move, depth: _judgeDepth);
+      verdict = await judgeMove(await _engine, before, move);
     } catch (e) {
       if (id != _gameId) return;
       // Sans moteur, on accepte le coup sans le juger et la partie continue.

@@ -67,6 +67,16 @@ class GameRecord {
   final Ending ending;
 }
 
+/// Score moyen de l'utilisateur dans [games], entre 0 et 1 ; 0 sans partie.
+double meanScore(Iterable<GameRecord> games) {
+  var points = 0.0, count = 0;
+  for (final game in games) {
+    points += game.score;
+    count++;
+  }
+  return count == 0 ? 0 : points / count;
+}
+
 /// Comment la partie s'est terminée, d'après le tag `Termination`.
 enum Ending {
   time('au temps'),

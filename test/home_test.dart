@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_test/flutter_test.dart';
@@ -9,6 +9,8 @@ import 'package:dartchess/dartchess.dart' hide File;
 import 'package:linedrill/app/drill_controller.dart';
 import 'package:linedrill/app/play_controller.dart';
 import 'package:linedrill/app/providers.dart';
+import 'package:linedrill/core/opening_tree.dart';
+import 'package:linedrill/core/openings.dart';
 import 'package:linedrill/core/training.dart';
 import 'package:linedrill/engine/chess_engine.dart';
 import 'package:linedrill/core/pgn_import.dart';
@@ -56,6 +58,7 @@ void main() {
   repertoireTests();
   playTests();
   drillTests();
+  openingsTests();
   builderTests();
 
   Future<void> pump(WidgetTester tester) async {
@@ -370,6 +373,171 @@ void drillTests() {
     await tester.tap(find.text('Suivant'));
     await _settle(tester);
     expect(find.text('2 / 2'), findsOneWidget);
+  });
+}
+
+class _OpeningGames extends GamesNotifier {
+  @override
+  Future<GamesState> build() async => GamesState(
+        username: 'Lappeau',
+        games: parseGames(
+          [
+            _many(11, '1. e4 c5 2. Nf3', '0-1'),
+            _many(9, '1. e4 c5 2. d4', '1-0'),
+            _many(10, '1. e4 e5 2. Nf3', '1-0'),
+          ].join('\n'),
+          'Lappeau',
+        ),
+      );
+}
+
+/// Table des noms réduite aux positions du test.
+OpeningBook _testBook() {
+  String key(List<String> sans) {
+    Position p = Chess.initial;
+    for (final san in sans) {
+      p = p.play(p.parseSan(san)!);
+    }
+    return positionKey(p);
+  }
+
+  return OpeningBook({
+    key(['e4', 'c5']): 'Sicilian Defense',
+    key(['e4', 'e5']): 'King\'s Pawn Game',
+    key(['e4', 'e5', 'Nf3']): 'King\'s Knight Opening',
+  });
+}
+
+/// Moteur factice : tout se vaut, sauf 2. Nf3 contre la Sicilienne, qui perd
+/// gros là où 2. d4 est le meilleur coup.
+class _SicilianEngine implements ChessEngine {
+  @override
+  Future<List<EngineLine>> analyse(String fen, {int depth = 12, int multiPv = 1}) async {
+    final p = Chess.fromSetup(Setup.parseFen(fen));
+    final moves = fen.split(' ').first;
+    if (moves == 'rnbqkbnr/pp1ppppp/8/2p5/4P3/8/PPPP1PPP/RNBQKBNR') return [const EngineLine('d2d4', 40)];
+    if (moves == 'rnbqkbnr/pp1ppppp/8/2p5/4P3/5N2/PPPP1PPP/RNBQKB1R') return [const EngineLine('d7d6', 400)];
+    final first = p.legalMoves.entries.firstWhere((e) => e.value.isNotEmpty);
+    final uci = NormalMove(from: first.key, to: first.value.squares.first).uci;
+    return [EngineLine(uci, p.turn == Side.white ? 20 : -20)];
+  }
+
+  @override
+  Future<void> dispose() async {}
+}
+
+void openingsTests() {
+  testWidgets('mes ouvertures : familles, coups connus, retour à l\'arbre', (tester) async {
+    tester.view.physicalSize = const Size(1080, 4000);
+    tester.view.devicePixelRatio = 2.5;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(ProviderScope(
+      overrides: [
+        gamesProvider.overrideWith(_OpeningGames.new),
+        _tmpDir(),
+        openingBookProvider.overrideWith((ref) async => _testBook()),
+      ],
+      child: const MaterialApp(home: HomeShell()),
+    ));
+    await _settle(tester);
+
+    await tester.tap(find.text('Répertoire'));
+    await _settle(tester);
+    await tester.tap(find.text('Mes ouvertures'));
+    await _settle(tester);
+
+    // La plus jouée d'abord, ouverte ; la suivante repliée.
+    expect(find.text('Sicilian Defense'), findsOneWidget);
+    expect(find.text('20 parties · 45 % · 1 coup connu', findRichText: true), findsOneWidget);
+    expect(find.text('King\'s Knight Opening'), findsOneWidget);
+    expect(find.text('10 parties · 100 % · 2 coups connus', findRichText: true), findsOneWidget);
+    expect(find.text('1. e4 c5 2. Nf3'), findsOneWidget);
+    expect(find.text('11 parties · 0 %', findRichText: true), findsOneWidget);
+    expect(find.text('1 coup connu sur 2'), findsOneWidget);
+    expect(find.text('Ensuite tu hésites : 2. Nf3 (55 %) ou 2. d4 (45 %).'), findsOneWidget);
+
+    await tester.tap(find.text('King\'s Knight Opening'));
+    await _settle(tester);
+    expect(find.text('1. e4 e5 2. Nf3'), findsOneWidget);
+    expect(find.text('Au-delà, pas assez de parties pour juger.'), findsOneWidget);
+
+    // Une variante ouvre l'arbre là où l'habitude s'arrête.
+    await tester.tap(find.text('1. e4 c5 2. Nf3'));
+    await _settle(tester);
+    expect(find.text('Mes ouvertures'), findsNothing);
+    expect(find.textContaining('Cette ligne : 20 parties · 45 %'), findsOneWidget);
+    expect(find.text('2. Nf3'), findsOneWidget);
+    expect(find.text('2. d4'), findsOneWidget);
+  });
+
+  testWidgets('mes ouvertures : Stockfish corrige un coup, puis le répertoire est créé', (tester) async {
+    tester.view.physicalSize = const Size(1080, 4000);
+    tester.view.devicePixelRatio = 2.5;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(ProviderScope(
+      overrides: [
+        gamesProvider.overrideWith(_OpeningGames.new),
+        _tmpDir(),
+        openingBookProvider.overrideWith((ref) async => _testBook()),
+        engineProvider.overrideWith((ref) async => _SicilianEngine()),
+      ],
+      child: const MaterialApp(home: HomeShell()),
+    ));
+    await _settle(tester);
+
+    await tester.tap(find.text('Répertoire'));
+    await _settle(tester);
+    await tester.tap(find.text('Mes ouvertures'));
+    await _settle(tester);
+
+    // Deux passages du moteur, chacun suivi d'une écriture sur disque.
+    await tester.tap(find.text('Vérifier mes coups'));
+    final verified = find.textContaining('Coups vérifiés par Stockfish : 1 coup à corriger.');
+    for (var i = 0; i < 5 && verified.evaluate().isEmpty; i++) {
+      await _settle(tester);
+    }
+    expect(verified, findsOneWidget);
+    expect(find.text('Tu joues 2. Nf3 (55 %) : gaffe. Mieux : 2. d4.'), findsOneWidget);
+    expect(find.text('1. e4 c5 2. d4'), findsOneWidget);
+
+    // Le message n'arrive qu'une fois le répertoire écrit sur disque.
+    await tester.tap(find.text('Ajouter 3 coups au répertoire'));
+    final added = find.textContaining('3 coups ajoutés');
+    for (var i = 0; i < 5 && added.evaluate().isEmpty; i++) {
+      await _settle(tester);
+    }
+    expect(added, findsOneWidget);
+    expect(find.textContaining('Rien à ajouter'), findsOneWidget);
+    expect(find.text('Ton répertoire prévoit 2. d4, tu joues surtout 2. Nf3 (55 %).'), findsOneWidget);
+
+    final container = ProviderScope.containerOf(tester.element(find.byType(HomeShell, skipOffstage: false)));
+    final repertoire = container.read(repertoireProvider).value!;
+    expect({for (final e in repertoire.entries) e.line.join(' '): e.san}, {'': 'e4', 'e4 c5': 'd4', 'e4 e5': 'Nf3'});
+  });
+
+  testWidgets('mes ouvertures : trop peu de parties', (tester) async {
+    tester.view.physicalSize = const Size(1080, 4000);
+    tester.view.devicePixelRatio = 2.5;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(ProviderScope(
+      overrides: [
+        gamesProvider.overrideWith(_FakeGames.new),
+        _tmpDir(),
+        openingBookProvider.overrideWith((ref) async => _testBook()),
+      ],
+      child: const MaterialApp(home: HomeShell()),
+    ));
+    await _settle(tester);
+
+    await tester.tap(find.text('Répertoire'));
+    await _settle(tester);
+    await tester.tap(find.text('Mes ouvertures'));
+    await _settle(tester);
+    expect(find.textContaining('Pas encore assez de parties avec cette couleur'), findsOneWidget);
+
+    await tester.tap(find.text('Noirs'));
+    await _settle(tester);
+    expect(find.textContaining('une variante compte à partir de 5 parties'), findsOneWidget);
   });
 }
 
