@@ -6,6 +6,7 @@ import '../app/providers.dart';
 import '../core/drill.dart';
 import '../core/repertoire.dart';
 import 'format.dart';
+import 'builder_screen.dart';
 import 'drill_screen.dart';
 import 'games_sheet.dart';
 import 'openings_screen.dart';
@@ -56,6 +57,19 @@ class RepertoireView extends ConsumerWidget {
             onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(
               builder: (_) => OpeningsScreen(onOpenInTree: onOpenInTree),
             )),
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+          child: Align(
+            alignment: Alignment.centerLeft,
+            child: (entries.isEmpty ? FilledButton.icon : OutlinedButton.icon)(
+              onPressed: () => Navigator.of(context).push(
+                MaterialPageRoute<void>(builder: (_) => const BuilderScreen()),
+              ),
+              icon: const Icon(Icons.auto_fix_high, size: 18),
+              label: const Text('Préparer à partir de mes parties'),
+            ),
           ),
         ),
         if (entries.isNotEmpty) const _DrillPanel(),

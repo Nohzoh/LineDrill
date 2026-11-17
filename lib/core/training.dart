@@ -103,10 +103,10 @@ const judgeDepth = 12;
 
 /// Verdict sur un coup de l'utilisateur.
 class MoveVerdict {
-  const MoveVerdict(this.quality, {this.better, this.loss = 0, this.explanation});
+  const MoveVerdict(this.quality, {this.better, this.loss = 0, this.explanation, this.playedCp});
 
   MoveVerdict withExplanation(MoveExplanation? explanation) =>
-      MoveVerdict(quality, better: better, loss: loss, explanation: explanation);
+      MoveVerdict(quality, better: better, loss: loss, explanation: explanation, playedCp: playedCp);
 
   final MoveQuality quality;
 
@@ -119,6 +119,9 @@ class MoveVerdict {
 
   /// Pourquoi le coup est moins bon (imprécision, erreur, gaffe).
   final MoveExplanation? explanation;
+
+  /// Évaluation après le coup joué, de mon point de vue (moteur seulement).
+  final int? playedCp;
 }
 
 /// Juge un coup à partir des lignes du moteur avant le coup.
@@ -133,7 +136,7 @@ MoveVerdict judgeEngineMove({
 }) {
   if (playedUci == bestLine.uci) return const MoveVerdict(MoveQuality.good);
   final loss = math.max(0.0, winChances(bestLine.cp) - winChances(playedCp));
-  return MoveVerdict(MoveQuality.fromLoss(loss), better: bestSan, loss: loss);
+  return MoveVerdict(MoveQuality.fromLoss(loss), better: bestSan, loss: loss, playedCp: playedCp);
 }
 
 /// Coup moteur (UCI standard, roque en `e1g1`) converti pour [position].

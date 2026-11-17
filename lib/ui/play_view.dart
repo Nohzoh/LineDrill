@@ -6,8 +6,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../app/board_style.dart';
 import '../app/play_controller.dart';
 import '../app/providers.dart';
-import '../core/explain.dart';
 import '../core/training.dart';
+import 'explanation_view.dart';
 
 /// Partie corrigée : réglages, puis partie avec correction coup par coup.
 class PlayView extends ConsumerWidget {
@@ -323,7 +323,7 @@ class _CorrectionCard extends StatelessWidget {
             if (verdict.explanation case final explanation?
                 when !explanation.isEmpty) ...[
               const SizedBox(height: 8),
-              _ExplanationText(explanation: explanation, showsArrows: true),
+              ExplanationView(explanation: explanation, showsArrows: true),
             ],
             Wrap(
               alignment: WrapAlignment.end,
@@ -402,7 +402,7 @@ class _VerdictLineState extends State<_VerdictLine> {
           if (canExplain && _open)
             Padding(
               padding: const EdgeInsets.fromLTRB(28, 4, 8, 4),
-              child: _ExplanationText(explanation: explanation, showsArrows: false),
+              child: ExplanationView(explanation: explanation, showsArrows: false),
             ),
         ],
       ),
@@ -410,60 +410,8 @@ class _VerdictLineState extends State<_VerdictLine> {
   }
 }
 
-/// Conséquences de mon coup, puis ce que le meilleur coup apportait.
-class _ExplanationText extends StatelessWidget {
-  const _ExplanationText({required this.explanation, required this.showsArrows});
-
-  final MoveExplanation explanation;
-
-  /// Les flèches sont visibles sur l'échiquier (coup en attente).
-  final bool showsArrows;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final small = theme.textTheme.bodySmall;
-    Widget bullet(String text) => Padding(
-          padding: const EdgeInsets.only(bottom: 2),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text('•  '),
-              Expanded(child: Text(text)),
-            ],
-          ),
-        );
-    Widget line(String label, String moves, Color color) => Padding(
-          padding: const EdgeInsets.only(top: 2, bottom: 6),
-          child: Text.rich(
-            TextSpan(children: [
-              TextSpan(text: '$label : ', style: small),
-              TextSpan(
-                text: moves,
-                style: small?.copyWith(color: color, fontWeight: FontWeight.w600),
-              ),
-            ]),
-          ),
-        );
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        for (final c in explanation.consequences) bullet(c),
-        if (explanation.refutation.isNotEmpty)
-          line(
-            showsArrows ? 'Suite probable (flèche rouge)' : 'Suite probable après ton coup',
-            explanation.refutation,
-            _red,
-          ),
-        for (final m in explanation.missed) bullet(m),
-        if (explanation.bestLine.isNotEmpty) line('Ligne conseillée', explanation.bestLine, _green),
-      ],
-    );
-  }
-}
-
-const _green = Color(0xcc15781b);
-const _red = Color(0xccb3261e);
+const _green = arrowGreen;
+const _red = arrowRed;
 
 class _ResultCard extends StatelessWidget {
   const _ResultCard({
