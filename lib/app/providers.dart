@@ -110,7 +110,9 @@ class RepertoireNotifier extends AsyncNotifier<Repertoire> {
       (await ref.watch(repertoireStoreProvider.future)).loadRepertoire();
 
   Future<void> _save(Repertoire Function(Repertoire) change) async {
-    final next = change(await future);
+    // État courant s'il est chargé : deux modifications rapprochées ne
+    // s'écrasent pas.
+    final next = change(state.value ?? await future);
     state = AsyncData(next);
     await (await ref.read(repertoireStoreProvider.future)).saveRepertoire(next);
   }
@@ -124,6 +126,15 @@ class RepertoireNotifier extends AsyncNotifier<Repertoire> {
           )));
 
   Future<void> remove(Side color, String key) => _save((r) => r.without(color, key));
+
+  /// Ajoute ou remplace plusieurs coups de référence en une fois.
+  Future<void> addAll(Iterable<RepertoireEntry> entries) => _save((r) {
+        var next = r;
+        for (final e in entries) {
+          next = next.withEntry(e);
+        }
+        return next;
+      });
 }
 
 final repertoireProvider =

@@ -56,6 +56,7 @@ void main() {
   repertoireTests();
   playTests();
   drillTests();
+  builderTests();
 
   Future<void> pump(WidgetTester tester) async {
     tester.view.physicalSize = const Size(1080, 4000);
@@ -369,5 +370,66 @@ void drillTests() {
     await tester.tap(find.text('Suivant'));
     await _settle(tester);
     expect(find.text('2 / 2'), findsOneWidget);
+  });
+}
+
+/// Moteur factice : aucun coup n'est mauvais.
+class _NeutralEngine implements ChessEngine {
+  @override
+  Future<List<EngineLine>> analyse(String fen, {int depth = 12, int multiPv = 1}) async {
+    final p = Chess.fromSetup(Setup.parseFen(fen));
+    final first = p.legalMoves.entries.firstWhere((e) => e.value.isNotEmpty);
+    final uci = NormalMove(from: first.key, to: first.value.squares.first).uci;
+    return [EngineLine(uci, 0, [uci])];
+  }
+
+  @override
+  Future<void> dispose() async {}
+}
+
+void builderTests() {
+  testWidgets('préparer le répertoire à partir de mes parties', (tester) async {
+    tester.view.physicalSize = const Size(1080, 4000);
+    tester.view.devicePixelRatio = 2.5;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(ProviderScope(
+      overrides: [
+        gamesProvider.overrideWith(_WeakGames.new),
+        _tmpDir(),
+        engineProvider.overrideWith((ref) async => _NeutralEngine()),
+      ],
+      child: const MaterialApp(home: HomeShell()),
+    ));
+    await _settle(tester);
+    await tester.tap(find.text('Répertoire'));
+    await _settle(tester);
+    await tester.tap(find.text('Préparer à partir de mes parties'));
+    await _settle(tester);
+    await tester.tap(find.text('Analyser mes parties'));
+    await _settle(tester);
+
+    expect(find.textContaining('3 positions : 3 coups habituels gardés'), findsOneWidget);
+    expect(find.text('Ajouter 3 coups au répertoire'), findsOneWidget);
+
+    // Décocher une position, puis ajouter le reste.
+    await tester.tap(find.text('Coups habituels (3)'));
+    await _settle(tester);
+    await tester.tap(find.byType(Checkbox).first);
+    await _settle(tester);
+    expect(find.text('Ajouter 2 coups au répertoire'), findsOneWidget);
+    await tester.tap(find.text('Ajouter 2 coups au répertoire'));
+    // Écriture du répertoire sur disque (plusieurs opérations réelles).
+    for (var i = 0; i < 3; i++) {
+      await _settle(tester);
+    }
+    expect(find.text('2 coups ajoutés à ton répertoire'), findsOneWidget);
+    expect(find.textContaining('2 coups de référence'), findsOneWidget);
+
+    // Une seconde préparation reconnaît ce qui est déjà dans le répertoire.
+    await tester.tap(find.text('Préparer à partir de mes parties'));
+    await _settle(tester);
+    await tester.tap(find.text('Analyser mes parties'));
+    await _settle(tester);
+    expect(find.text('Ajouter 1 coup au répertoire'), findsOneWidget);
   });
 }

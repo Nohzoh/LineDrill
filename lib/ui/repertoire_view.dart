@@ -6,6 +6,7 @@ import '../app/providers.dart';
 import '../core/drill.dart';
 import '../core/repertoire.dart';
 import 'format.dart';
+import 'builder_screen.dart';
 import 'drill_screen.dart';
 import 'games_sheet.dart';
 
@@ -42,6 +43,19 @@ class RepertoireView extends ConsumerWidget {
                 : '${entries.length} coups de référence · '
                     '${reached == 0 ? 'pas encore rencontrés dans tes parties' : 'respectés dans ${percent(followed / reached)} des cas'}',
             style: Theme.of(context).textTheme.bodyMedium,
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+          child: Align(
+            alignment: Alignment.centerLeft,
+            child: (entries.isEmpty ? FilledButton.icon : OutlinedButton.icon)(
+              onPressed: () => Navigator.of(context).push(
+                MaterialPageRoute<void>(builder: (_) => const BuilderScreen()),
+              ),
+              icon: const Icon(Icons.auto_fix_high, size: 18),
+              label: const Text('Préparer à partir de mes parties'),
+            ),
           ),
         ),
         if (entries.isNotEmpty) const _DrillPanel(),
