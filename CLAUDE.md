@@ -91,3 +91,4 @@ Lignes faibles attendues :
 
 - Logique métier (import, parsing, arbre, planification) en Dart pur, testée avec `flutter test`, séparée de l'UI.
 - Messages de commit en anglais.
+- CI : Flutter figé sur 3.47.9 dans `.github/workflows/build-apk.yml` (même version qu’en local). Flutter 3.50 déclare `package:flutter/material.dart` obsolète au profit de `package:material_ui` : migration à faire en montant la version.

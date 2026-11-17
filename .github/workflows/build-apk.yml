@@ -25,13 +25,17 @@ jobs:
           distribution: temurin
           java-version: '17'
 
+      # Version figée : celle avec laquelle l'appli est développée et testée.
+      # La monter volontairement (et ici), pas au gré des sorties de Flutter.
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
+          flutter-version: 3.47.9
           cache: true
 
       - run: flutter pub get
-      - run: flutter analyze
+      # Les avertissements « info » (dépréciations…) ne bloquent pas une release.
+      - run: flutter analyze --no-fatal-infos
       - run: flutter test
 
       - name: Decode signing key
